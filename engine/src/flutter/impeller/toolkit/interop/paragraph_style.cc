@@ -5,6 +5,7 @@
 #include "impeller/toolkit/interop/paragraph_style.h"
 
 #include "flutter/fml/string_conversion.h"
+#include "flutter/txt/src/txt/platform.h"
 
 namespace impeller::interop {
 
@@ -59,6 +60,15 @@ void ParagraphStyle::SetBackground(ScopedObject<Paint> paint) {
 
 txt::TextStyle ParagraphStyle::CreateTextStyle() const {
   auto style = style_.GetTextStyle();
+
+  // txt::ParagraphStyle::GetTextStyle always forwards the (possibly empty)
+  // family name. Platform font managers resolve "" to a default face, but font
+  // managers without system fonts (e.g. wasm) match nothing for it and text
+  // silently lays out with zero height. Ask for the platform default families
+  // instead so registered fonts aliased to them are found.
+  if (style_.font_family.empty()) {
+    style.font_families = txt::GetDefaultFontFamilies();
+  }
 
   if (foreground_) {
     style.foreground = foreground_->GetPaint();

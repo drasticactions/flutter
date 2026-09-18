@@ -6,9 +6,30 @@
 # //flutter/BUILD.gn pulls in Flutter SDK dependencies which will crash
 # when the target CPU is WASM.
 
+import("//build/toolchain/wasm.gni")
 import("//flutter/common/config.gni")
 
 # This is the default target when building when the target CPU is WASM.
 group("wasm") {
-  deps = [ "//flutter/web_sdk:flutter_web_sdk_archive" ]
+  deps = [
+    ":impeller_sdk",
+    "//flutter/web_sdk:flutter_web_sdk_archive",
+  ]
+}
+
+# The Impeller C API (impeller.h + libimpeller.a) for embedding into other
+# Emscripten modules. Built in its own toolchain, like skwasm, so that the
+# Impeller build files are not evaluated in the default toolchain (where
+# //flutter/BUILD.gn would drag in the Dart VM).
+wasm_toolchain("impeller_sdk") {
+  extra_toolchain_args = {
+    enable_lto = false
+
+    # Match the .NET browser-wasm runtime, which links with Wasm EH/SjLj.
+    wasm_use_wasm_sjlj = true
+  }
+}
+
+group("impeller_sdk") {
+  deps = [ "//flutter/impeller/toolkit/interop:sdk(:impeller_sdk)" ]
 }

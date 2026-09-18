@@ -14,6 +14,12 @@ declare_args() {
   wasm_use_workers = false
   wasm_shared_memory = false
   wasm_use_dwarf = false
+
+  # Lower setjmp/longjmp with the native Wasm exception-handling proposal
+  # (-sSUPPORT_LONGJMP=wasm) instead of Emscripten's JavaScript-based scheme.
+  # Required when the resulting objects are linked into a module that uses
+  # Wasm EH, such as the .NET browser-wasm runtime.
+  wasm_use_wasm_sjlj = false
 }
 
 em_config_path = "$emsdk_dir/.emscripten"

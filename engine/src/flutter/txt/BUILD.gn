@@ -95,6 +95,13 @@ source_set("txt") {
     libs += [ "fontconfig" ]
   }
 
+  if (is_wasm) {
+    # ICU's char16ptr.h instantiates std::basic_string_view<uint16_t>, which
+    # older libc++ releases (as shipped with some Emscripten SDKs) flag as
+    # deprecated.
+    cflags = [ "-Wno-deprecated-declarations" ]
+  }
+
   if (is_mac || is_ios) {
     sources += [
       "src/txt/platform_mac.h",

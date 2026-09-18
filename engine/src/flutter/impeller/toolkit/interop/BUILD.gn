@@ -74,7 +74,6 @@ impeller_component("interop_base") {
   ]
 
   public_deps = [
-    ":embedded_icu_data",
     ":interop_api",
     "../../base",
     "../../display_list",
@@ -84,6 +83,11 @@ impeller_component("interop_base") {
     "//flutter/fml",
     "//flutter/txt",
   ]
+
+  # Wasm builds compile the ICU data into libicu itself.
+  if (!is_wasm) {
+    public_deps += [ ":embedded_icu_data" ]
+  }
 }
 
 # Wires up the public API entrypoints to the appropriate backends.
@@ -116,93 +120,101 @@ impeller_component("static_library") {
   }
 }
 
-impeller_component("example_gl") {
-  target_type = "executable"
+# The examples need a windowing system and the unit tests pull in the Dart VM
+# through the test harness; neither exists for wasm.
+if (!is_wasm) {
+  impeller_component("example_gl") {
+    target_type = "executable"
 
-  output_name = "impeller_interop_example_gl"
+    output_name = "impeller_interop_example_gl"
 
-  sources = [ "example_gl.c" ]
+    sources = [ "example_gl.c" ]
 
-  deps = [
-    ":interop",
-    "//flutter/third_party/glfw",
-  ]
-}
-
-impeller_component("example_mtl") {
-  target_type = "executable"
-
-  output_name = "impeller_interop_example_mtl"
-
-  sources = [ "example_mtl.m" ]
-
-  deps = [
-    ":interop",
-    "//flutter/third_party/glfw",
-  ]
-
-  frameworks = [ "QuartzCore.framework" ]
-}
-
-impeller_component("example_vk") {
-  target_type = "executable"
-
-  output_name = "impeller_interop_example_vk"
-
-  sources = [ "example_vk.c" ]
-
-  deps = [
-    ":interop",
-    "//flutter/third_party/glfw",
-  ]
-}
-
-group("example") {
-  deps = []
-  if (impeller_enable_opengles) {
-    deps += [ ":example_gl" ]
+    deps = [
+      ":interop",
+      "//flutter/third_party/glfw",
+    ]
   }
 
-  if (impeller_enable_metal) {
-    deps += [ ":example_mtl" ]
+  impeller_component("example_mtl") {
+    target_type = "executable"
+
+    output_name = "impeller_interop_example_mtl"
+
+    sources = [ "example_mtl.m" ]
+
+    deps = [
+      ":interop",
+      "//flutter/third_party/glfw",
+    ]
+
+    frameworks = [ "QuartzCore.framework" ]
   }
 
-  if (impeller_enable_vulkan) {
-    deps += [ ":example_vk" ]
+  impeller_component("example_vk") {
+    target_type = "executable"
+
+    output_name = "impeller_interop_example_vk"
+
+    sources = [ "example_vk.c" ]
+
+    deps = [
+      ":interop",
+      "//flutter/third_party/glfw",
+    ]
   }
-}
 
-impeller_component("interop_unittests") {
-  testonly = true
+  group("example") {
+    deps = []
+    if (impeller_enable_opengles) {
+      deps += [ ":example_gl" ]
+    }
 
-  sources = [
-    "impeller_unittests.cc",
-    "object_unittests.cc",
-    "playground_test.cc",
-    "playground_test.h",
-  ]
+    if (impeller_enable_metal) {
+      deps += [ ":example_mtl" ]
+    }
 
-  deps = [
-    ":interop",
-    "../../fixtures",
-    "../../playground:playground_test",
-    "//flutter/testing:testing_lib",
-  ]
+    if (impeller_enable_vulkan) {
+      deps += [ ":example_vk" ]
+    }
+  }
+
+  impeller_component("interop_unittests") {
+    testonly = true
+
+    sources = [
+      "impeller_unittests.cc",
+      "object_unittests.cc",
+      "playground_test.cc",
+      "playground_test.h",
+    ]
+
+    deps = [
+      ":interop",
+      "../../fixtures",
+      "../../playground:playground_test",
+      "//flutter/testing:testing_lib",
+    ]
+  }
 }
 
 zip_bundle("sdk") {
   if (is_mac) {
     zip_out_dir = "darwin-${target_cpu}"
+  } else if (is_wasm) {
+    zip_out_dir = "wasm"
   } else {
     zip_out_dir = "${full_target_platform_name}"
   }
 
   output = "${zip_out_dir}/impeller_sdk.zip"
 
-  deps = [
-    ":shared_library",
-    ":static_library",
-  ]
+  # Wasm consumers link the static archive into their own Emscripten module;
+  # there is no standalone shared library artifact.
+  deps = [ ":static_library" ]
+  if (!is_wasm) {
+    deps += [ ":shared_library" ]
+  }
   if (is_linux || is_mac || is_win) {
     deps += [ "//flutter/impeller/compiler:impellerc" ]
   }
@@ -261,11 +273,11 @@ zip_bundle("sdk") {
     ]
   }
 
-  if (is_mac || is_linux || is_android || is_qnx) {
+  if (is_mac || is_linux || is_android || is_qnx || is_wasm) {
     files += [
       {
         source =
-            "$root_build_dir/obj/flutter/impeller/toolkit/interop/libimpeller.a"
+            "$root_out_dir/obj/flutter/impeller/toolkit/interop/libimpeller.a"
         destination = "lib/libimpeller.a"
       },
     ]
@@ -273,7 +285,7 @@ zip_bundle("sdk") {
     files += [
       {
         source =
-            "$root_build_dir/obj/flutter/impeller/toolkit/interop/impeller.lib"
+            "$root_out_dir/obj/flutter/impeller/toolkit/interop/impeller.lib"
         destination = "lib/impeller.lib"
       },
     ]

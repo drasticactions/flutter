@@ -5,9 +5,16 @@
 #include "impeller/toolkit/interop/backend/gles/context_gles.h"
 
 #include "impeller/base/validation.h"
+#include "impeller/renderer/backend/gles/context_gles.h"
+
+#if defined(FML_OS_EMSCRIPTEN)
+// Wasm builds only compile the GLES 3 (WebGL 2) shader bundles.
+#include "impeller/entity/gles3/entity_shaders_gles.h"
+#include "impeller/entity/gles3/framebuffer_blend_shaders_gles.h"
+#else  // defined(FML_OS_EMSCRIPTEN)
 #include "impeller/entity/gles/entity_shaders_gles.h"
 #include "impeller/entity/gles/framebuffer_blend_shaders_gles.h"
-#include "impeller/renderer/backend/gles/context_gles.h"
+#endif  // defined(FML_OS_EMSCRIPTEN)
 
 namespace impeller::interop {
 
@@ -20,12 +27,21 @@ ScopedObject<Context> ContextGLES::Create(
     return {};
   }
   std::vector<std::shared_ptr<fml::Mapping>> shader_mappings = {
+#if defined(FML_OS_EMSCRIPTEN)
+      std::make_shared<fml::NonOwnedMapping>(
+          impeller_entity_shaders_gles3_data,
+          impeller_entity_shaders_gles3_length),
+      std::make_shared<fml::NonOwnedMapping>(
+          impeller_framebuffer_blend_shaders_gles3_data,
+          impeller_framebuffer_blend_shaders_gles3_length),
+#else  // defined(FML_OS_EMSCRIPTEN)
       std::make_shared<fml::NonOwnedMapping>(
           impeller_entity_shaders_gles_data,
           impeller_entity_shaders_gles_length),
       std::make_shared<fml::NonOwnedMapping>(
           impeller_framebuffer_blend_shaders_gles_data,
           impeller_framebuffer_blend_shaders_gles_length),
+#endif  // defined(FML_OS_EMSCRIPTEN)
   };
   auto impeller_context = impeller::ContextGLES::Create(
       Flags{}, std::move(proc_table), shader_mappings, false);

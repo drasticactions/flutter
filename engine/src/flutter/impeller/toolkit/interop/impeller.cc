@@ -75,7 +75,9 @@ DEFINE_PEER_GETTER(ParagraphStyle, ImpellerParagraphStyle);
 DEFINE_PEER_GETTER(Path, ImpellerPath);
 DEFINE_PEER_GETTER(PathBuilder, ImpellerPathBuilder);
 DEFINE_PEER_GETTER(Surface, ImpellerSurface);
+#if IMPELLER_ENABLE_VULKAN
 DEFINE_PEER_GETTER(SwapchainVK, ImpellerVulkanSwapchain);
+#endif  // IMPELLER_ENABLE_VULKAN
 DEFINE_PEER_GETTER(Texture, ImpellerTexture);
 DEFINE_PEER_GETTER(TypographyContext, ImpellerTypographyContext);
 
@@ -189,7 +191,7 @@ bool ImpellerContextGetVulkanInfo(ImpellerContext IMPELLER_NONNULL context,
       ->GetInfo(*out_vulkan_info);
 #else   // IMPELLER_ENABLE_VULKAN
   VALIDATION_LOG << "Vulkan not available.";
-  return nullptr;
+  return false;
 #endif  // IMPELLER_ENABLE_VULKAN
 }
 
@@ -222,7 +224,12 @@ void ImpellerVulkanSwapchainRelease(ImpellerVulkanSwapchain swapchain) {
 IMPELLER_EXTERN_C
 ImpellerSurface ImpellerVulkanSwapchainAcquireNextSurfaceNew(
     ImpellerVulkanSwapchain swapchain) {
+#if IMPELLER_ENABLE_VULKAN
   return GetPeer(swapchain)->AcquireNextSurface().Leak();
+#else   // IMPELLER_ENABLE_VULKAN
+  VALIDATION_LOG << "Vulkan not available.";
+  return nullptr;
+#endif  // IMPELLER_ENABLE_VULKAN
 }
 
 IMPELLER_EXTERN_C ImpellerDisplayListBuilder

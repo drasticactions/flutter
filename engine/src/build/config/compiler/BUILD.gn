@@ -316,6 +316,16 @@ config("compiler") {
       cflags += [ "-sSHARED_MEMORY=1" ]
       ldflags += [ "-sSHARED_MEMORY=1" ]
     }
+    if (wasm_use_wasm_sjlj) {
+      cflags += [
+        "-sSUPPORT_LONGJMP=wasm",
+        "-fwasm-exceptions",
+      ]
+      ldflags += [
+        "-sSUPPORT_LONGJMP=wasm",
+        "-fwasm-exceptions",
+      ]
+    }
     ldflags += [
       "-s",
       "WASM=1",

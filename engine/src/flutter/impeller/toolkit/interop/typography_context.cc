@@ -6,21 +6,29 @@
 
 #include <mutex>
 
-#include "flutter/fml/icu_util.h"
+#include "flutter/fml/build_config.h"
 #include "flutter/txt/src/txt/platform.h"
 #include "impeller/base/validation.h"
+
+// Wasm builds compile the ICU data directly into libicu (see
+// //flutter/third_party/icu:icudata), so there is nothing to load at runtime.
+#if !defined(FML_OS_EMSCRIPTEN)
+#include "flutter/fml/icu_util.h"
 #include "impeller/toolkit/interop/embedded_icu_data.h"
+#endif  // !defined(FML_OS_EMSCRIPTEN)
 
 namespace impeller::interop {
 
 TypographyContext::TypographyContext()
     : collection_(std::make_shared<txt::FontCollection>()) {
+#if !defined(FML_OS_EMSCRIPTEN)
   static std::once_flag sICUInitOnceFlag;
   std::call_once(sICUInitOnceFlag, []() {
     auto icu_data = std::make_unique<fml::NonOwnedMapping>(
         impeller_embedded_icu_data_data, impeller_embedded_icu_data_length);
     fml::icu::InitializeICUFromMapping(std::move(icu_data));
   });
+#endif  // !defined(FML_OS_EMSCRIPTEN)
   // The fallback for all fonts. Looks in platform specific locations.
   collection_->SetupDefaultFontManager(0u);
 

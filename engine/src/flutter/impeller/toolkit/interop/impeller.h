@@ -511,6 +511,12 @@ typedef enum ImpellerFontStyle {
   kImpellerFontStyleItalic,
 } ImpellerFontStyle;
 
+typedef enum ImpellerFontSlant {
+  kImpellerFontSlantUpright,
+  kImpellerFontSlantItalic,
+  kImpellerFontSlantOblique,
+} ImpellerFontSlant;
+
 typedef enum ImpellerTextAlignment {
   kImpellerTextAlignmentLeft,
   kImpellerTextAlignmentRight,
@@ -571,6 +577,14 @@ typedef struct ImpellerIRect {
   int64_t width;
   int64_t height;
 } ImpellerIRect;
+
+typedef struct ImpellerTypefaceStyle {
+  /// The weight, from 1 to 1000. 400 is normal and 700 is bold.
+  uint32_t weight;
+  /// The width, from 1 (ultra-condensed) to 9 (ultra-expanded). 5 is normal.
+  uint32_t width;
+  ImpellerFontSlant slant;
+} ImpellerTypefaceStyle;
 
 typedef struct ImpellerRange {
   uint64_t start;
@@ -2961,6 +2975,38 @@ uint64_t ImpellerTypefaceCopyData(ImpellerTypeface IMPELLER_NONNULL typeface,
                                   uint32_t* IMPELLER_NULLABLE out_face_index);
 
 //------------------------------------------------------------------------------
+/// @brief      Copy the family name of a typeface as a NUL-terminated UTF-8
+///             string.
+///
+///             Call with a NULL destination to get the size of the name,
+///             including the terminator.
+///
+/// @param[in]  typeface  The typeface.
+/// @param[out] dst       The destination, or NULL.
+/// @param[in]  dst_size  The size of the destination in bytes.
+///
+/// @return     The size of the name in bytes, including the terminator. The
+///             name is truncated if the destination is too small, and is
+///             always terminated.
+///
+IMPELLER_EXPORT
+uint64_t ImpellerTypefaceCopyFamilyName(ImpellerTypeface IMPELLER_NONNULL
+                                            typeface,
+                                        char* IMPELLER_NULLABLE dst,
+                                        uint64_t dst_size);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the weight, width and slant of a typeface.
+///
+/// @param[in]  typeface   The typeface.
+/// @param[out] out_style  The style.
+///
+IMPELLER_EXPORT
+void ImpellerTypefaceGetStyle(ImpellerTypeface IMPELLER_NONNULL typeface,
+                              ImpellerTypefaceStyle* IMPELLER_NONNULL
+                                  out_style);
+
+//------------------------------------------------------------------------------
 // Font
 //------------------------------------------------------------------------------
 
@@ -3057,6 +3103,104 @@ void ImpellerFontGetGlyphBounds(ImpellerFont IMPELLER_NONNULL font,
                                 const uint16_t* IMPELLER_NONNULL glyphs,
                                 uint32_t count,
                                 ImpellerRect* IMPELLER_NONNULL out_bounds);
+
+//------------------------------------------------------------------------------
+/// @brief      Find the typeface of a font family that best matches a weight,
+///             width and slant. Fonts registered with the context are
+///             searched before the fonts of the platform.
+///
+/// @param[in]  context  The typography context.
+/// @param[in]  family   The family name, or NULL for the default family of
+///                      the platform.
+/// @param[in]  style    The style to match.
+///
+/// @return     The typeface, or NULL if there is no such family.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerTypeface IMPELLER_NULLABLE
+ImpellerTypographyContextMatchTypefaceNew(
+    ImpellerTypographyContext IMPELLER_NONNULL context,
+    const char* IMPELLER_NULLABLE family,
+    const ImpellerTypefaceStyle* IMPELLER_NONNULL style);
+
+//------------------------------------------------------------------------------
+/// @brief      Find a typeface that has a glyph for a code point, for font
+///             fallback. The given family is preferred if it has the glyph.
+///
+/// @param[in]  context       The typography context.
+/// @param[in]  family        The preferred family, or NULL.
+/// @param[in]  style         The style to match.
+/// @param[in]  bcp47_locale  The locale of the text, for example "ja-JP", or
+///                           NULL.
+/// @param[in]  codepoint     The Unicode code point.
+///
+/// @return     The typeface, or NULL if no font has the glyph.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerTypeface IMPELLER_NULLABLE
+ImpellerTypographyContextMatchCharacterNew(
+    ImpellerTypographyContext IMPELLER_NONNULL context,
+    const char* IMPELLER_NULLABLE family,
+    const ImpellerTypefaceStyle* IMPELLER_NONNULL style,
+    const char* IMPELLER_NULLABLE bcp47_locale,
+    uint32_t codepoint);
+
+//------------------------------------------------------------------------------
+/// @brief      Copy the styles of the typefaces in a font family. The family
+///             is looked up in the fonts registered with the context first,
+///             then in the fonts of the platform.
+///
+///             Call with a NULL destination to get the number of styles.
+///
+/// @param[in]  context    The typography context.
+/// @param[in]  family     The family name.
+/// @param[out] dst        The destination, or NULL.
+/// @param[in]  dst_count  The number of styles the destination has room for.
+///
+/// @return     The number of styles in the family, which is zero if there is
+///             no such family. At most `dst_count` are copied.
+///
+IMPELLER_EXPORT
+uint32_t ImpellerTypographyContextCopyFamilyStyles(
+    ImpellerTypographyContext IMPELLER_NONNULL context,
+    const char* IMPELLER_NONNULL family,
+    ImpellerTypefaceStyle* IMPELLER_NULLABLE dst,
+    uint32_t dst_count);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the number of font families known to the context, which
+///             are the registered families followed by the families of the
+///             platform.
+///
+/// @param[in]  context  The typography context.
+///
+/// @return     The number of families.
+///
+IMPELLER_EXPORT
+uint32_t ImpellerTypographyContextGetFamilyCount(
+    ImpellerTypographyContext IMPELLER_NONNULL context);
+
+//------------------------------------------------------------------------------
+/// @brief      Copy the name of a font family as a NUL-terminated UTF-8
+///             string.
+///
+///             Call with a NULL destination to get the size of the name,
+///             including the terminator.
+///
+/// @param[in]  context   The typography context.
+/// @param[in]  index     The index of the family, less than the count from
+///                       `ImpellerTypographyContextGetFamilyCount`.
+/// @param[out] dst       The destination, or NULL.
+/// @param[in]  dst_size  The size of the destination in bytes.
+///
+/// @return     The size of the name in bytes, including the terminator. Zero
+///             if the index is out of range. The name is truncated if the
+///             destination is too small, and is always terminated.
+///
+IMPELLER_EXPORT
+uint64_t ImpellerTypographyContextCopyFamilyName(
+    ImpellerTypographyContext IMPELLER_NONNULL context,
+    uint32_t index,
+    char* IMPELLER_NULLABLE dst,
+    uint64_t dst_size);
 
 //------------------------------------------------------------------------------
 // Paragraph Style

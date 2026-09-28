@@ -58,12 +58,6 @@ void Font::GetGlyphBounds(const uint16_t* glyphs,
   }
 }
 
-void Font::GetGlyphAdvances(const uint16_t* glyphs,
-                            uint32_t count,
-                            float* out_advances) const {
-  font_.getWidths({glyphs, count}, {out_advances, count});
-}
-
 sk_sp<SkTextBlob> Font::MakeTextBlob(const uint16_t* glyphs,
                                      const ImpellerPoint* positions,
                                      uint32_t count) const {

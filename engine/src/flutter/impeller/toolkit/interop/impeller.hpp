@@ -246,12 +246,19 @@ struct Proc {
   PROC(ImpellerTextureRelease)                                    \
   PROC(ImpellerTextureRetain)                                     \
   PROC(ImpellerTypefaceCopyData)                                  \
+  PROC(ImpellerTypefaceCopyFamilyName)                            \
   PROC(ImpellerTypefaceCopyTableData)                             \
   PROC(ImpellerTypefaceCreateWithDataNew)                         \
   PROC(ImpellerTypefaceCreateWithVariationsNew)                   \
+  PROC(ImpellerTypefaceGetStyle)                                  \
   PROC(ImpellerTypefaceGetUnitsPerEm)                             \
   PROC(ImpellerTypefaceRelease)                                   \
   PROC(ImpellerTypefaceRetain)                                    \
+  PROC(ImpellerTypographyContextCopyFamilyName)                   \
+  PROC(ImpellerTypographyContextCopyFamilyStyles)                 \
+  PROC(ImpellerTypographyContextGetFamilyCount)                   \
+  PROC(ImpellerTypographyContextMatchCharacterNew)                \
+  PROC(ImpellerTypographyContextMatchTypefaceNew)                 \
   PROC(ImpellerTypographyContextNew)                              \
   PROC(ImpellerTypographyContextRegisterFont)                     \
   PROC(ImpellerTypographyContextRelease)                          \
@@ -1301,6 +1308,38 @@ class TypographyContext : public Object<ImpellerTypographyContext,
         optional_family_name_alias  //
     );
   }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypographyContextGetFamilyCount
+  /// @see      ImpellerTypographyContextCopyFamilyName
+  ///
+  std::vector<std::string> GetFamilyNames() const {
+    std::vector<std::string> names;
+    const auto count =
+        gGlobalProcTable.ImpellerTypographyContextGetFamilyCount(Get());
+    for (uint32_t i = 0; i < count; i++) {
+      std::string name(gGlobalProcTable.ImpellerTypographyContextCopyFamilyName(
+                           Get(), i, nullptr, 0),
+                       '\0');
+      gGlobalProcTable.ImpellerTypographyContextCopyFamilyName(
+          Get(), i, name.data(), name.size());
+      name.pop_back();
+      names.push_back(std::move(name));
+    }
+    return names;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypographyContextCopyFamilyStyles
+  ///
+  std::vector<ImpellerTypefaceStyle> GetFamilyStyles(const char* family) const {
+    std::vector<ImpellerTypefaceStyle> styles(
+        gGlobalProcTable.ImpellerTypographyContextCopyFamilyStyles(
+            Get(), family, nullptr, 0));
+    styles.resize(gGlobalProcTable.ImpellerTypographyContextCopyFamilyStyles(
+        Get(), family, styles.data(), styles.size()));
+    return styles;
+  }
 };
 
 //------------------------------------------------------------------------------
@@ -1690,6 +1729,28 @@ class Typeface : public Object<ImpellerTypeface, ImpellerTypefaceTraits> {
   }
 
   //----------------------------------------------------------------------------
+  /// @see      ImpellerTypefaceCopyFamilyName
+  ///
+  std::string GetFamilyName() const {
+    std::string name(
+        gGlobalProcTable.ImpellerTypefaceCopyFamilyName(Get(), nullptr, 0),
+        '\0');
+    gGlobalProcTable.ImpellerTypefaceCopyFamilyName(Get(), name.data(),
+                                                    name.size());
+    name.pop_back();
+    return name;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypefaceGetStyle
+  ///
+  ImpellerTypefaceStyle GetStyle() const {
+    ImpellerTypefaceStyle style = {};
+    gGlobalProcTable.ImpellerTypefaceGetStyle(Get(), &style);
+    return style;
+  }
+
+  //----------------------------------------------------------------------------
   /// @see      ImpellerTypefaceCopyData
   ///
   std::vector<uint8_t> CopyData(uint32_t* face_index = nullptr) const {
@@ -1700,6 +1761,30 @@ class Typeface : public Object<ImpellerTypeface, ImpellerTypefaceTraits> {
     return data;
   }
 };
+
+//------------------------------------------------------------------------------
+/// @see      ImpellerTypographyContextMatchTypefaceNew
+///
+inline Typeface MatchTypeface(const TypographyContext& context,
+                              const char* family,
+                              const ImpellerTypefaceStyle& style) {
+  return Typeface(gGlobalProcTable.ImpellerTypographyContextMatchTypefaceNew(
+                      context.Get(), family, &style),
+                  AdoptTag::kAdopt);
+}
+
+//------------------------------------------------------------------------------
+/// @see      ImpellerTypographyContextMatchCharacterNew
+///
+inline Typeface MatchCharacter(const TypographyContext& context,
+                               const char* family,
+                               const ImpellerTypefaceStyle& style,
+                               const char* bcp47_locale,
+                               uint32_t codepoint) {
+  return Typeface(gGlobalProcTable.ImpellerTypographyContextMatchCharacterNew(
+                      context.Get(), family, &style, bcp47_locale, codepoint),
+                  AdoptTag::kAdopt);
+}
 
 //------------------------------------------------------------------------------
 /// @see      ImpellerFont

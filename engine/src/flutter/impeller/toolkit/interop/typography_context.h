@@ -6,6 +6,8 @@
 #define FLUTTER_IMPELLER_TOOLKIT_INTEROP_TYPOGRAPHY_CONTEXT_H_
 
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "flutter/fml/mapping.h"
 #include "flutter/third_party/skia/modules/skparagraph/include/TypefaceFontProvider.h"
@@ -44,9 +46,42 @@ class TypographyContext final
   bool RegisterFont(std::unique_ptr<fml::Mapping> font_data,
                     const char* family_name_alias);
 
+  //----------------------------------------------------------------------------
+  /// @brief      Find the typeface of a family that best matches a style.
+  ///             Registered fonts are searched before system fonts. A null
+  ///             family matches the default family.
+  ///
+  sk_sp<SkTypeface> MatchTypeface(const char* family,
+                                  const SkFontStyle& style) const;
+
+  //----------------------------------------------------------------------------
+  /// @brief      Find a typeface that has a glyph for a code point, preferring
+  ///             the given family.
+  ///
+  sk_sp<SkTypeface> MatchCharacter(const char* family,
+                                   const SkFontStyle& style,
+                                   const char* bcp47_locale,
+                                   uint32_t codepoint) const;
+
+  //----------------------------------------------------------------------------
+  /// @brief      The names of all font families, registered ones first,
+  ///             without duplicates.
+  ///
+  const std::vector<std::string>& GetFamilyNames() const;
+
+  //----------------------------------------------------------------------------
+  /// @brief      The styles of the typefaces in a family, from the first font
+  ///             manager that has the family.
+  ///
+  std::vector<SkFontStyle> GetFamilyStyles(const char* family) const;
+
  private:
   std::shared_ptr<txt::FontCollection> collection_;
   sk_sp<skia::textlayout::TypefaceFontProvider> asset_font_manager_;
+  mutable std::vector<std::string> family_names_;
+
+  std::vector<sk_sp<SkFontMgr>> GetFontManagers() const;
+  mutable bool family_names_valid_ = false;
 };
 
 }  // namespace impeller::interop

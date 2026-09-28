@@ -1096,6 +1096,89 @@ TEST_P(InteropPlaygroundTest, CanDrawGlyphs) {
   ASSERT_EQ(alpha(50, 34), 0u);
 }
 
+static bool RegisterFixtureFont(hpp::TypographyContext& context,
+                                const char* name,
+                                const char* alias) {
+  auto fixture = flutter::testing::OpenFixtureAsMapping(name);
+  if (!fixture) {
+    return false;
+  }
+  auto mapping = std::make_unique<hpp::Mapping>(
+      fixture->GetMapping(), fixture->GetSize(),
+      [data = std::shared_ptr<fml::Mapping>(std::move(fixture))]() {});
+  return context.RegisterFont(std::move(mapping), alias);
+}
+
+TEST_P(InteropPlaygroundTest, CanMatchRegisteredTypefaces) {
+  hpp::TypographyContext context;
+  ASSERT_TRUE(RegisterFixtureFont(context, "Roboto-Regular.ttf", "Faces"));
+  ASSERT_TRUE(RegisterFixtureFont(context, "Roboto-Medium.ttf", "Faces"));
+  ASSERT_TRUE(RegisterFixtureFont(context, "ahem.ttf", "MyAhem"));
+
+  const ImpellerTypefaceStyle normal = {400, 5, kImpellerFontSlantUpright};
+  auto ahem = hpp::MatchTypeface(context, "MyAhem", normal);
+  ASSERT_TRUE(ahem);
+  ASSERT_EQ(ahem.GetUnitsPerEm(), 1000u);
+
+  auto regular = hpp::MatchTypeface(context, "Faces", normal);
+  ASSERT_TRUE(regular);
+  auto style = regular.GetStyle();
+  ASSERT_EQ(style.weight, 400u);
+  ASSERT_EQ(style.width, 5u);
+  ASSERT_EQ(style.slant, kImpellerFontSlantUpright);
+  ASSERT_EQ(regular.GetFamilyName(), "Roboto");
+
+  auto medium =
+      hpp::MatchTypeface(context, "Faces", {600, 5, kImpellerFontSlantUpright});
+  ASSERT_TRUE(medium);
+  ASSERT_EQ(medium.GetStyle().weight, 500u);
+
+  ASSERT_FALSE(hpp::MatchTypeface(context, "No Such Family", normal));
+
+  const auto names = context.GetFamilyNames();
+  ASSERT_GE(names.size(), 2u);
+  ASSERT_NE(std::find(names.begin(), names.end(), "Faces"), names.end());
+  ASSERT_NE(std::find(names.begin(), names.end(), "MyAhem"), names.end());
+}
+
+TEST_P(InteropPlaygroundTest, CanListTheStylesOfFamilies) {
+  hpp::TypographyContext context;
+  ASSERT_TRUE(RegisterFixtureFont(context, "Roboto-Regular.ttf", "Faces"));
+  ASSERT_TRUE(RegisterFixtureFont(context, "Roboto-Medium.ttf", "Faces"));
+
+  auto styles = context.GetFamilyStyles("Faces");
+  ASSERT_EQ(styles.size(), 2u);
+  std::sort(styles.begin(), styles.end(),
+            [](const auto& a, const auto& b) { return a.weight < b.weight; });
+  ASSERT_EQ(styles[0].weight, 400u);
+  ASSERT_EQ(styles[1].weight, 500u);
+  for (const auto& style : styles) {
+    ASSERT_EQ(style.width, 5u);
+    ASSERT_EQ(style.slant, kImpellerFontSlantUpright);
+  }
+
+  ASSERT_TRUE(context.GetFamilyStyles("No Such Family").empty());
+}
+
+TEST_P(InteropPlaygroundTest, CanMatchCharactersInRegisteredFonts) {
+  const ImpellerTypefaceStyle kNormalStyle = {400, 5,
+                                              kImpellerFontSlantUpright};
+  hpp::TypographyContext context;
+  ASSERT_TRUE(RegisterFixtureFont(context, "Roboto-Regular.ttf", "Text"));
+  ASSERT_TRUE(RegisterFixtureFont(context, "NotoColorEmoji.ttf", "Emoji"));
+
+  // The preferred family has the glyph.
+  auto latin = hpp::MatchCharacter(context, "Text", kNormalStyle, "en-US", 'A');
+  ASSERT_TRUE(latin);
+  ASSERT_EQ(latin.GetFamilyName(), "Roboto");
+
+  // Falls back to a registered family that has the glyph.
+  auto emoji =
+      hpp::MatchCharacter(context, "Text", kNormalStyle, nullptr, 0x1F600);
+  ASSERT_TRUE(emoji);
+  ASSERT_EQ(emoji.GetFamilyName(), "Noto Color Emoji");
+}
+
 TEST_P(InteropPlaygroundTest, CanControlEllipses) {
   hpp::TypographyContext context;
   auto style = hpp::ParagraphStyle{};

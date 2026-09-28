@@ -40,10 +40,6 @@ class Font final
                       uint32_t count,
                       ImpellerRect* out_bounds) const;
 
-  void GetGlyphAdvances(const uint16_t* glyphs,
-                        uint32_t count,
-                        float* out_advances) const;
-
   sk_sp<SkTextBlob> MakeTextBlob(const uint16_t* glyphs,
                                  const ImpellerPoint* positions,
                                  uint32_t count) const;

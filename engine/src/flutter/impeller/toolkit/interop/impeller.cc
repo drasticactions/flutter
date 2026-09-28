@@ -5,6 +5,7 @@
 #include "impeller/toolkit/interop/impeller.h"
 
 #include <algorithm>
+#include <cstring>
 #include <iterator>
 #include <sstream>
 
@@ -1663,6 +1664,129 @@ uint64_t ImpellerTypefaceCopyData(ImpellerTypeface typeface,
                                   uint64_t dst_size,
                                   uint32_t* out_face_index) {
   return GetPeer(typeface)->CopyData(dst, dst_size, out_face_index);
+}
+
+static uint64_t CopyString(const std::string& string,
+                           char* dst,
+                           uint64_t dst_size) {
+  const uint64_t size = string.size() + 1u;
+  if (dst == nullptr || dst_size == 0u) {
+    return size;
+  }
+  const auto copied = std::min<uint64_t>(string.size(), dst_size - 1u);
+  ::memcpy(dst, string.data(), copied);
+  dst[copied] = '\0';
+  return size;
+}
+
+static SkFontStyle ToSkiaType(const ImpellerTypefaceStyle& style) {
+  SkFontStyle::Slant slant = SkFontStyle::kUpright_Slant;
+  switch (style.slant) {
+    case kImpellerFontSlantUpright:
+      slant = SkFontStyle::kUpright_Slant;
+      break;
+    case kImpellerFontSlantItalic:
+      slant = SkFontStyle::kItalic_Slant;
+      break;
+    case kImpellerFontSlantOblique:
+      slant = SkFontStyle::kOblique_Slant;
+      break;
+  }
+  return SkFontStyle(std::clamp<int>(style.weight, 1, 1000),
+                     std::clamp<int>(style.width, 1, 9), slant);
+}
+
+static ImpellerTypefaceStyle ToImpellerType(const SkFontStyle& style) {
+  ImpellerTypefaceStyle result = {};
+  result.weight = std::clamp(style.weight(), 1, 1000);
+  result.width = std::clamp(style.width(), 1, 9);
+  switch (style.slant()) {
+    case SkFontStyle::kUpright_Slant:
+      result.slant = kImpellerFontSlantUpright;
+      break;
+    case SkFontStyle::kItalic_Slant:
+      result.slant = kImpellerFontSlantItalic;
+      break;
+    case SkFontStyle::kOblique_Slant:
+      result.slant = kImpellerFontSlantOblique;
+      break;
+  }
+  return result;
+}
+
+IMPELLER_EXTERN_C
+uint64_t ImpellerTypefaceCopyFamilyName(ImpellerTypeface typeface,
+                                        char* dst,
+                                        uint64_t dst_size) {
+  return CopyString(GetPeer(typeface)->GetFamilyName(), dst, dst_size);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerTypefaceGetStyle(ImpellerTypeface typeface,
+                              ImpellerTypefaceStyle* out_style) {
+  *out_style = ToImpellerType(GetPeer(typeface)->GetStyle());
+}
+
+IMPELLER_EXTERN_C
+ImpellerTypeface ImpellerTypographyContextMatchTypefaceNew(
+    ImpellerTypographyContext context,
+    const char* family,
+    const ImpellerTypefaceStyle* style) {
+  auto typeface = GetPeer(context)->MatchTypeface(family, ToSkiaType(*style));
+  if (!typeface) {
+    return nullptr;
+  }
+  return Create<Typeface>(std::move(typeface)).Leak();
+}
+
+IMPELLER_EXTERN_C
+ImpellerTypeface ImpellerTypographyContextMatchCharacterNew(
+    ImpellerTypographyContext context,
+    const char* family,
+    const ImpellerTypefaceStyle* style,
+    const char* bcp47_locale,
+    uint32_t codepoint) {
+  auto typeface = GetPeer(context)->MatchCharacter(family, ToSkiaType(*style),
+                                                   bcp47_locale, codepoint);
+  if (!typeface) {
+    return nullptr;
+  }
+  return Create<Typeface>(std::move(typeface)).Leak();
+}
+
+IMPELLER_EXTERN_C
+uint32_t ImpellerTypographyContextCopyFamilyStyles(
+    ImpellerTypographyContext context,
+    const char* family,
+    ImpellerTypefaceStyle* dst,
+    uint32_t dst_count) {
+  const auto styles = GetPeer(context)->GetFamilyStyles(family);
+  if (dst) {
+    const auto count = std::min<size_t>(styles.size(), dst_count);
+    for (size_t i = 0; i < count; i++) {
+      dst[i] = ToImpellerType(styles[i]);
+    }
+  }
+  return styles.size();
+}
+
+IMPELLER_EXTERN_C
+uint32_t ImpellerTypographyContextGetFamilyCount(
+    ImpellerTypographyContext context) {
+  return GetPeer(context)->GetFamilyNames().size();
+}
+
+IMPELLER_EXTERN_C
+uint64_t ImpellerTypographyContextCopyFamilyName(
+    ImpellerTypographyContext context,
+    uint32_t index,
+    char* dst,
+    uint64_t dst_size) {
+  const auto& names = GetPeer(context)->GetFamilyNames();
+  if (index >= names.size()) {
+    return 0u;
+  }
+  return CopyString(names[index], dst, dst_size);
 }
 
 IMPELLER_EXTERN_C

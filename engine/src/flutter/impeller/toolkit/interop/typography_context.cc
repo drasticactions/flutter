@@ -13,10 +13,13 @@
 
 // Wasm builds compile the ICU data directly into libicu (see
 // //flutter/third_party/icu:icudata), so there is nothing to load at runtime.
-#if !defined(FML_OS_EMSCRIPTEN)
+// They embed a default font instead.
+#if defined(FML_OS_EMSCRIPTEN)
+#include "impeller/toolkit/interop/embedded_default_font.h"  // nogncheck
+#else
 #include "flutter/fml/icu_util.h"
 #include "impeller/toolkit/interop/embedded_icu_data.h"
-#endif  // !defined(FML_OS_EMSCRIPTEN)
+#endif  // defined(FML_OS_EMSCRIPTEN)
 
 namespace impeller::interop {
 
@@ -30,8 +33,19 @@ TypographyContext::TypographyContext()
     fml::icu::InitializeICUFromMapping(std::move(icu_data));
   });
 #endif  // !defined(FML_OS_EMSCRIPTEN)
+#if defined(FML_OS_EMSCRIPTEN)
+  // Browsers don't expose their fonts, so the default is an embedded font.
+  auto default_fonts = sk_make_sp<skia::textlayout::TypefaceFontProvider>();
+  default_fonts->registerTypeface(txt::GetDefaultFontManager()->makeFromData(
+      SkData::MakeWithoutCopy(impeller_embedded_default_font_data,
+                              impeller_embedded_default_font_length)));
+  default_font_manager_ = std::move(default_fonts);
+  collection_->SetDefaultFontManager(default_font_manager_);
+#else
   // The fallback for all fonts. Looks in platform specific locations.
   collection_->SetupDefaultFontManager(0u);
+  default_font_manager_ = txt::GetDefaultFontManager();
+#endif  // defined(FML_OS_EMSCRIPTEN)
 
   // Looks for fonts in user supplied blobs.
   asset_font_manager_ = sk_make_sp<skia::textlayout::TypefaceFontProvider>();
@@ -94,7 +108,7 @@ bool TypographyContext::RegisterFont(std::unique_ptr<fml::Mapping> font_data,
 // The managers in the order paragraphs use them: registered fonts, then the
 // platform.
 std::vector<sk_sp<SkFontMgr>> TypographyContext::GetFontManagers() const {
-  return {asset_font_manager_, txt::GetDefaultFontManager()};
+  return {asset_font_manager_, default_font_manager_};
 }
 
 static bool HasGlyph(const sk_sp<SkTypeface>& typeface, uint32_t codepoint) {
@@ -115,7 +129,7 @@ sk_sp<SkTypeface> TypographyContext::MatchTypeface(
   }
   // The platform's own default, such as fontconfig's sans-serif.
   if (auto typeface =
-          txt::GetDefaultFontManager()->legacyMakeTypeface(nullptr, style)) {
+          default_font_manager_->legacyMakeTypeface(nullptr, style)) {
     return typeface;
   }
   for (const auto& name : txt::GetDefaultFontFamilies()) {

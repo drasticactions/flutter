@@ -13,6 +13,15 @@ embed_blob("embedded_icu_data") {
   deps = []
 }
 
+# Browsers don't expose their fonts, so wasm builds carry a default font.
+embed_blob("embedded_default_font") {
+  symbol_name = "embedded_default_font"
+  blob = "//flutter/txt/third_party/fonts/Roboto-Regular.ttf"
+  hdr = "$target_gen_dir/embedded_default_font.h"
+  cc = "$target_gen_dir/embedded_default_font.cc"
+  deps = []
+}
+
 # The public C/C++ Impeller API.
 impeller_component("interop_api") {
   public = [
@@ -94,8 +103,10 @@ impeller_component("interop_base") {
     "//flutter/txt",
   ]
 
-  # Wasm builds compile the ICU data into libicu itself.
-  if (!is_wasm) {
+  # Wasm builds compile the ICU data into libicu itself, and embed a font.
+  if (is_wasm) {
+    public_deps += [ ":embedded_default_font" ]
+  } else {
     public_deps += [ ":embedded_icu_data" ]
   }
 }

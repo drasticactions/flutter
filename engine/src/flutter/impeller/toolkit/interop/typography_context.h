@@ -80,6 +80,8 @@ class TypographyContext final
   sk_sp<skia::textlayout::TypefaceFontProvider> asset_font_manager_;
   mutable std::vector<std::string> family_names_;
 
+  sk_sp<SkFontMgr> default_font_manager_;
+
   std::vector<sk_sp<SkFontMgr>> GetFontManagers() const;
   mutable bool family_names_valid_ = false;
 };

@@ -59,6 +59,28 @@ void PathBuilder::Close() {
   builder_.close();
 }
 
+void PathBuilder::AddPath(const Path& path, const Matrix* transform) {
+  if (transform) {
+    builder_.addPath(path.GetPath(), ToSkMatrix(*transform));
+  } else {
+    builder_.addPath(path.GetPath());
+  }
+}
+
+void PathBuilder::SvgArcTo(const Size& radii,
+                           Degrees x_axis_rotation,
+                           bool large_arc,
+                           bool clockwise,
+                           const Point& end_point) {
+  builder_.arcTo(ToSkiaVector(radii),                                     //
+                 x_axis_rotation.degrees,                                 //
+                 large_arc ? SkPathBuilder::kLarge_ArcSize                //
+                           : SkPathBuilder::kSmall_ArcSize,               //
+                 clockwise ? SkPathDirection::kCW : SkPathDirection::kCCW,  //
+                 ToSkiaType(end_point)                                    //
+  );
+}
+
 ScopedObject<Path> PathBuilder::TakePath(FillType fill) {
   builder_.setFillType(ToSkiaType(fill));
   return Create<Path>(builder_.detach());

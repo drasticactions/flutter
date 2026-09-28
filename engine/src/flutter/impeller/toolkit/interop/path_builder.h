@@ -6,6 +6,7 @@
 #define FLUTTER_IMPELLER_TOOLKIT_INTEROP_PATH_BUILDER_H_
 
 #include "flutter/third_party/skia/include/core/SkPathBuilder.h"
+#include "impeller/geometry/matrix.h"
 #include "impeller/geometry/path_source.h"
 #include "impeller/geometry/point.h"
 #include "impeller/geometry/rect.h"
@@ -47,6 +48,14 @@ class PathBuilder final
   void AddRoundedRect(const Rect& rect, const RoundingRadii& radii);
 
   void Close();
+
+  void AddPath(const Path& path, const Matrix* transform);
+
+  void SvgArcTo(const Size& radii,
+                Degrees x_axis_rotation,
+                bool large_arc,
+                bool clockwise,
+                const Point& end_point);
 
   ScopedObject<Path> TakePath(FillType fill);
 

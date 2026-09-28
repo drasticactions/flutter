@@ -6,6 +6,7 @@
 #include "flutter/fml/string_conversion.h"
 #include "flutter/testing/testing.h"
 #include "impeller/base/allocation.h"
+#include "impeller/base/validation.h"
 #include "impeller/renderer/backend/gles/context_gles.h"
 #include "impeller/toolkit/interop/context.h"
 #include "impeller/toolkit/interop/dl.h"
@@ -631,6 +632,197 @@ TEST_P(InteropPlaygroundTest, CanGetPathBounds) {
   ASSERT_EQ(bounds.y, 100);
   ASSERT_EQ(bounds.width, 100);
   ASSERT_EQ(bounds.height, 100);
+}
+
+TEST_P(InteropPlaygroundTest, CanGetPathTightBounds) {
+  const auto path = hpp::PathBuilder{}
+                        .MoveTo({0, 0})
+                        .QuadraticCurveTo({50, 100}, {100, 0})
+                        .Build();
+  const auto bounds = path.GetBounds();
+  const auto tight = path.GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.height, 100);
+  ASSERT_FLOAT_EQ(tight.height, 50);
+  ASSERT_FLOAT_EQ(tight.width, 100);
+}
+
+TEST_P(InteropPlaygroundTest, CanCheckPathContainsPoint) {
+  // Two nested squares: a hole with even-odd, filled with non-zero.
+  auto builder = hpp::PathBuilder{};
+  builder.AddRect({0, 0, 100, 100}).AddRect({25, 25, 50, 50});
+  const auto odd = builder.BuildCopy(kImpellerFillTypeOdd);
+  const auto non_zero = builder.Build(kImpellerFillTypeNonZero);
+  ASSERT_TRUE(odd.Contains({10, 10}));
+  ASSERT_FALSE(odd.Contains({50, 50}));
+  ASSERT_TRUE(non_zero.Contains({50, 50}));
+  ASSERT_FALSE(non_zero.Contains({150, 50}));
+  ASSERT_EQ(odd.GetFillType(), kImpellerFillTypeOdd);
+  ASSERT_EQ(non_zero.GetFillType(), kImpellerFillTypeNonZero);
+  const auto changed = odd.WithFillType(kImpellerFillTypeNonZero);
+  ASSERT_EQ(changed.GetFillType(), kImpellerFillTypeNonZero);
+  ASSERT_TRUE(changed.Contains({50, 50}));
+}
+
+TEST_P(InteropPlaygroundTest, CanCheckPathIsEmpty) {
+  ASSERT_TRUE(hpp::PathBuilder{}.Build().IsEmpty());
+  ASSERT_FALSE(hpp::PathBuilder{}.AddRect({0, 0, 1, 1}).Build().IsEmpty());
+}
+
+TEST_P(InteropPlaygroundTest, CanTransformPaths) {
+  const auto path = hpp::PathBuilder{}.AddRect({0, 0, 10, 10}).Build();
+  ImpellerMatrix transform = {
+      // clang-format off
+      2.0, 0.0, 0.0, 0.0,
+      0.0, 3.0, 0.0, 0.0,
+      0.0, 0.0, 1.0, 0.0,
+      5.0, 7.0, 0.0, 1.0,
+      // clang-format on
+  };
+  const auto bounds = path.Transformed(transform).GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.x, 5);
+  ASSERT_FLOAT_EQ(bounds.y, 7);
+  ASSERT_FLOAT_EQ(bounds.width, 20);
+  ASSERT_FLOAT_EQ(bounds.height, 30);
+}
+
+TEST_P(InteropPlaygroundTest, CanPerformPathOps) {
+  const auto a = hpp::PathBuilder{}.AddRect({0, 0, 100, 100}).Build();
+  const auto b = hpp::PathBuilder{}.AddRect({50, 50, 100, 100}).Build();
+
+  const auto intersect = a.Op(b, kImpellerPathOpIntersect);
+  ASSERT_TRUE(intersect);
+  auto bounds = intersect.GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.x, 50);
+  ASSERT_FLOAT_EQ(bounds.width, 50);
+
+  const auto join = a.Op(b, kImpellerPathOpUnion);
+  bounds = join.GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.width, 150);
+  ASSERT_TRUE(join.Contains({125, 125}));
+
+  const auto difference = a.Op(b, kImpellerPathOpDifference);
+  ASSERT_TRUE(difference.Contains({25, 25}));
+  ASSERT_FALSE(difference.Contains({75, 75}));
+  ASSERT_FALSE(difference.Contains({125, 125}));
+
+  const auto reverse = a.Op(b, kImpellerPathOpReverseDifference);
+  ASSERT_FALSE(reverse.Contains({25, 25}));
+  ASSERT_TRUE(reverse.Contains({125, 125}));
+
+  const auto xor_path = a.Op(b, kImpellerPathOpXor);
+  ASSERT_TRUE(xor_path.Contains({25, 25}));
+  ASSERT_FALSE(xor_path.Contains({75, 75}));
+  ASSERT_TRUE(xor_path.Contains({125, 125}));
+
+  const auto none = a.Op(hpp::PathBuilder{}.AddRect({200, 200, 10, 10}).Build(),
+                         kImpellerPathOpIntersect);
+  ASSERT_TRUE(none);
+  ASSERT_TRUE(none.IsEmpty());
+}
+
+TEST_P(InteropPlaygroundTest, CanStrokePaths) {
+  const auto line =
+      hpp::PathBuilder{}.MoveTo({10, 50}).LineTo({110, 50}).Build();
+  ImpellerStrokeParameters stroke = {};
+  stroke.width = 10;
+  stroke.cap = kImpellerStrokeCapButt;
+  stroke.join = kImpellerStrokeJoinMiter;
+  stroke.miter_limit = 4;
+  const auto outline = line.Stroked(stroke);
+  ASSERT_TRUE(outline);
+  auto bounds = outline.GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.x, 10);
+  ASSERT_FLOAT_EQ(bounds.y, 45);
+  ASSERT_FLOAT_EQ(bounds.width, 100);
+  ASSERT_FLOAT_EQ(bounds.height, 10);
+  ASSERT_TRUE(outline.Contains({50, 52}));
+  ASSERT_FALSE(outline.Contains({50, 57}));
+
+  stroke.cap = kImpellerStrokeCapSquare;
+  bounds = line.Stroked(stroke).GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.x, 5);
+  ASSERT_FLOAT_EQ(bounds.width, 110);
+
+  // Hairlines have no outline.
+  stroke.width = 0;
+  ASSERT_FALSE(line.Stroked(stroke));
+}
+
+TEST_P(InteropPlaygroundTest, CanDashPaths) {
+  const auto line = hpp::PathBuilder{}.MoveTo({0, 0}).LineTo({100, 0}).Build();
+  const auto dashed = line.Dashed({10, 10});
+  ASSERT_TRUE(dashed);
+  // Five 10 unit dashes over 100 units.
+  const auto bounds = dashed.GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.x, 0);
+  ASSERT_FLOAT_EQ(bounds.width, 90);
+
+  ImpellerStrokeParameters stroke = {};
+  stroke.width = 2;
+  stroke.miter_limit = 4;
+  const auto outline = dashed.Stroked(stroke);
+  ASSERT_TRUE(outline.Contains({5, 0}));
+  ASSERT_FALSE(outline.Contains({15, 0}));
+  ASSERT_TRUE(outline.Contains({25, 0}));
+
+  const auto shifted = line.Dashed({10, 10}, 5).Stroked(stroke);
+  ASSERT_TRUE(shifted.Contains({2, 0}));
+  ASSERT_FALSE(shifted.Contains({7, 0}));
+
+  // Odd interval counts are invalid.
+  {
+    ScopedValidationDisable disable_validation;
+    ASSERT_FALSE(line.Dashed({10, 10, 10}));
+  }
+}
+
+TEST_P(InteropPlaygroundTest, CanAddPathsToBuilders) {
+  const auto rect = hpp::PathBuilder{}.AddRect({0, 0, 10, 10}).Build();
+  ImpellerMatrix translate = {
+      // clang-format off
+      1.0, 0.0, 0.0, 0.0,
+      0.0, 1.0, 0.0, 0.0,
+      0.0, 0.0, 1.0, 0.0,
+      20.0, 0.0, 0.0, 1.0,
+      // clang-format on
+  };
+  const auto both =
+      hpp::PathBuilder{}.AddPath(rect).AddPath(rect, &translate).Build();
+  const auto bounds = both.GetTightBounds();
+  ASSERT_FLOAT_EQ(bounds.width, 30);
+  ASSERT_TRUE(both.Contains({5, 5}));
+  ASSERT_FALSE(both.Contains({15, 5}));
+  ASSERT_TRUE(both.Contains({25, 5}));
+}
+
+TEST_P(InteropPlaygroundTest, CanAddSvgArcs) {
+  // A half circle of radius 50 from (0, 50) to (100, 50).
+  const auto clockwise = hpp::PathBuilder{}
+                             .MoveTo({0, 50})
+                             .SvgArcTo({50, 50}, 0, false, true, {100, 50})
+                             .Build();
+  auto bounds = clockwise.GetTightBounds();
+  ASSERT_NEAR(bounds.x, 0, 1e-3);
+  ASSERT_NEAR(bounds.y, 0, 1e-3);
+  ASSERT_NEAR(bounds.width, 100, 1e-3);
+  ASSERT_NEAR(bounds.height, 50, 1e-3);
+
+  const auto counter_clockwise =
+      hpp::PathBuilder{}
+          .MoveTo({0, 50})
+          .SvgArcTo({50, 50}, 0, false, false, {100, 50})
+          .Build();
+  bounds = counter_clockwise.GetTightBounds();
+  ASSERT_NEAR(bounds.y, 50, 1e-3);
+  ASSERT_NEAR(bounds.height, 50, 1e-3);
+
+  // Radii too small to reach the end point are scaled up.
+  const auto scaled = hpp::PathBuilder{}
+                          .MoveTo({0, 50})
+                          .SvgArcTo({10, 10}, 0, false, true, {100, 50})
+                          .Build();
+  bounds = scaled.GetTightBounds();
+  ASSERT_NEAR(bounds.height, 50, 1e-3);
 }
 
 TEST_P(InteropPlaygroundTest, CanControlEllipses) {

@@ -366,6 +366,19 @@ typedef enum ImpellerFillType {
   kImpellerFillTypeOdd,
 } ImpellerFillType;
 
+typedef enum ImpellerPathOp {
+  /// The area of the first path minus the area of the second.
+  kImpellerPathOpDifference,
+  /// The area common to both paths.
+  kImpellerPathOpIntersect,
+  /// The area covered by either path.
+  kImpellerPathOpUnion,
+  /// The area covered by exactly one of the paths.
+  kImpellerPathOpXor,
+  /// The area of the second path minus the area of the first.
+  kImpellerPathOpReverseDifference,
+} ImpellerPathOp;
+
 typedef enum ImpellerClipOperation {
   kImpellerClipOperationDifference,
   kImpellerClipOperationIntersect,
@@ -642,6 +655,22 @@ typedef struct ImpellerContextVulkanInfo {
   uint32_t graphics_queue_family_index;
   uint32_t graphics_queue_index;
 } ImpellerContextVulkanInfo;
+
+//------------------------------------------------------------------------------
+/// Describes how a path is stroked when its stroke outline is computed.
+///
+/// @see      `ImpellerPathCreateStrokedNew`
+///
+typedef struct ImpellerStrokeParameters {
+  /// The stroke width. Zero is a hairline, which has no fillable outline.
+  float width;
+  /// The shape at the ends of open contours.
+  ImpellerStrokeCap cap;
+  /// The shape at the corners between segments.
+  ImpellerStrokeJoin join;
+  /// The limit at which miter joins become bevel joins.
+  float miter_limit;
+} ImpellerStrokeParameters;
 
 typedef struct ImpellerTextDecoration {
   /// A mask of `ImpellerTextDecorationType`s to enable.
@@ -964,6 +993,139 @@ void ImpellerPathGetBounds(ImpellerPath IMPELLER_NONNULL path,
                            ImpellerRect* IMPELLER_NONNULL out_bounds);
 
 //------------------------------------------------------------------------------
+/// @brief      Get the tight bounds of the path.
+///
+///             Unlike `ImpellerPathGetBounds`, the tight bounds only include
+///             the points on the curves and not their control points.
+///
+/// @param[in]  path        The path.
+/// @param[out] out_bounds  The tight bounds of the path.
+///
+IMPELLER_EXPORT
+void ImpellerPathGetTightBounds(ImpellerPath IMPELLER_NONNULL path,
+                                ImpellerRect* IMPELLER_NONNULL out_bounds);
+
+//------------------------------------------------------------------------------
+/// @brief      Check if a point is inside the filled area of the path. The
+///             fill type of the path is honored. Open contours are treated as
+///             closed.
+///
+/// @param[in]  path   The path.
+/// @param[in]  point  The point.
+///
+/// @return     True if the point is inside the filled area of the path.
+///
+IMPELLER_EXPORT
+bool ImpellerPathContainsPoint(ImpellerPath IMPELLER_NONNULL path,
+                               const ImpellerPoint* IMPELLER_NONNULL point);
+
+//------------------------------------------------------------------------------
+/// @brief      Check if the path has no segments.
+///
+/// @param[in]  path  The path.
+///
+/// @return     True if the path is empty.
+///
+IMPELLER_EXPORT
+bool ImpellerPathIsEmpty(ImpellerPath IMPELLER_NONNULL path);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the fill type of the path.
+///
+/// @param[in]  path  The path.
+///
+/// @return     The fill type.
+///
+IMPELLER_EXPORT
+ImpellerFillType ImpellerPathGetFillType(ImpellerPath IMPELLER_NONNULL path);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a copy of the path with a different fill type.
+///
+/// @param[in]  path  The path.
+/// @param[in]  fill  The fill type of the new path.
+///
+/// @return     The new path.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
+ImpellerPathCreateWithFillTypeNew(ImpellerPath IMPELLER_NONNULL path,
+                                  ImpellerFillType fill);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a copy of the path with every point transformed.
+///
+/// @param[in]  path       The path.
+/// @param[in]  transform  The transformation.
+///
+/// @return     The transformed path.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
+ImpellerPathCreateTransformedNew(ImpellerPath IMPELLER_NONNULL path,
+                                 const ImpellerMatrix* IMPELLER_NONNULL
+                                     transform);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a path from a boolean operation on the filled areas of
+///             two paths. The fill types of both paths are honored.
+///
+///             The operation can fail on degenerate input. In that case, NULL
+///             is returned.
+///
+/// @param[in]  a   The first path.
+/// @param[in]  b   The second path.
+/// @param[in]  op  The operation.
+///
+/// @return     The result of the operation or NULL if the operation failed.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
+ImpellerPathCreateOpNew(ImpellerPath IMPELLER_NONNULL a,
+                        ImpellerPath IMPELLER_NONNULL b,
+                        ImpellerPathOp op);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a path that is the outline of the stroke of the given
+///             path. Filling the outline with a non-zero fill covers the same
+///             area as stroking the path.
+///
+///             All contours of the outline are closed.
+///
+/// @param[in]  path              The path.
+/// @param[in]  stroke            The stroke parameters. Hairlines (a width of
+///                               zero) have no outline.
+/// @param[in]  resolution_scale  The scale at which the outline is expected
+///                               to be drawn. Larger values give more precise
+///                               curves. Use 1.0 if unknown.
+///
+/// @return     The outline, or NULL if the stroke is a hairline.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
+ImpellerPathCreateStrokedNew(ImpellerPath IMPELLER_NONNULL path,
+                             const ImpellerStrokeParameters* IMPELLER_NONNULL
+                                 stroke,
+                             float resolution_scale);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a path made of the "on" intervals of a dash pattern
+///             applied along the contours of the given path. The result is the
+///             dashed center line. Stroke it to get the dashes.
+///
+/// @param[in]  path            The path.
+/// @param[in]  intervals       The dash pattern as alternating lengths of "on"
+///                             and "off" intervals.
+/// @param[in]  interval_count  The number of intervals. This must be even and
+///                             at least two.
+/// @param[in]  phase           The offset into the pattern at the start of
+///                             each contour.
+///
+/// @return     The dashed path, or NULL if the pattern is invalid.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
+ImpellerPathCreateDashedNew(ImpellerPath IMPELLER_NONNULL path,
+                            const float* IMPELLER_NONNULL intervals,
+                            uint32_t interval_count,
+                            float phase);
+
+//------------------------------------------------------------------------------
 // Path Builder
 //------------------------------------------------------------------------------
 
@@ -1099,6 +1261,46 @@ void ImpellerPathBuilderAddRoundedRect(
     ImpellerPathBuilder IMPELLER_NONNULL builder,
     const ImpellerRect* IMPELLER_NONNULL rect,
     const ImpellerRoundingRadii* IMPELLER_NONNULL rounding_radii);
+
+//------------------------------------------------------------------------------
+/// @brief      Add the contours of an existing path to the path.
+///
+/// @param[in]  builder    The builder.
+/// @param[in]  path       The path to add.
+/// @param[in]  transform  An optional transformation applied to the added
+///                        contours.
+///
+IMPELLER_EXPORT
+void ImpellerPathBuilderAddPath(ImpellerPathBuilder IMPELLER_NONNULL builder,
+                                ImpellerPath IMPELLER_NONNULL path,
+                                const ImpellerMatrix* IMPELLER_NULLABLE
+                                    transform);
+
+//------------------------------------------------------------------------------
+/// @brief      Add an elliptical arc from the cursor to the end point, as
+///             described by the SVG path "A" command. The radii are scaled up
+///             if they are too small to reach the end point.
+///
+///             If the cursor is at the end point, nothing is added. If either
+///             radius is zero, a line is added.
+///
+/// @param[in]  builder                  The builder.
+/// @param[in]  radii                    The radii of the ellipse.
+/// @param[in]  x_axis_rotation_degrees  The rotation of the ellipse.
+/// @param[in]  large_arc                Use the arc that sweeps 180 degrees
+///                                      or more.
+/// @param[in]  clockwise                Sweep clockwise (with a Y-down
+///                                      coordinate system).
+/// @param[in]  end_point                The end point.
+///
+IMPELLER_EXPORT
+void ImpellerPathBuilderSvgArcTo(ImpellerPathBuilder IMPELLER_NONNULL builder,
+                                 const ImpellerSize* IMPELLER_NONNULL radii,
+                                 float x_axis_rotation_degrees,
+                                 bool large_arc,
+                                 bool clockwise,
+                                 const ImpellerPoint* IMPELLER_NONNULL
+                                     end_point);
 
 //------------------------------------------------------------------------------
 /// @brief      Close the path.

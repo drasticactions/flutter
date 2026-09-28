@@ -7,6 +7,8 @@
 
 #include "flutter/third_party/skia/include/core/SkPath.h"
 #include "flutter/third_party/skia/include/core/SkPathBuilder.h"
+#include "impeller/geometry/matrix.h"
+#include "impeller/geometry/point.h"
 #include "impeller/toolkit/interop/impeller.h"
 #include "impeller/toolkit/interop/object.h"
 
@@ -26,6 +28,27 @@ class Path final
   SkPath GetPath() const;
 
   ImpellerRect GetBounds() const;
+
+  ImpellerRect GetTightBounds() const;
+
+  bool Contains(const Point& point) const;
+
+  bool IsEmpty() const;
+
+  ImpellerFillType GetFillType() const;
+
+  ScopedObject<Path> WithFillType(ImpellerFillType fill) const;
+
+  ScopedObject<Path> Transformed(const Matrix& transform) const;
+
+  ScopedObject<Path> Op(const Path& other, ImpellerPathOp op) const;
+
+  ScopedObject<Path> Stroked(const ImpellerStrokeParameters& stroke,
+                             float resolution_scale) const;
+
+  ScopedObject<Path> Dashed(const float* intervals,
+                            uint32_t interval_count,
+                            float phase) const;
 
  private:
   SkPathBuilder path_;

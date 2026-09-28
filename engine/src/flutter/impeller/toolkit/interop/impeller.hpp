@@ -188,6 +188,7 @@ struct Proc {
   PROC(ImpellerParagraphStyleSetTextDecoration)                   \
   PROC(ImpellerPathBuilderAddArc)                                 \
   PROC(ImpellerPathBuilderAddOval)                                \
+  PROC(ImpellerPathBuilderAddPath)                                \
   PROC(ImpellerPathBuilderAddRect)                                \
   PROC(ImpellerPathBuilderAddRoundedRect)                         \
   PROC(ImpellerPathBuilderClose)                                  \
@@ -199,8 +200,18 @@ struct Proc {
   PROC(ImpellerPathBuilderQuadraticCurveTo)                       \
   PROC(ImpellerPathBuilderRelease)                                \
   PROC(ImpellerPathBuilderRetain)                                 \
+  PROC(ImpellerPathBuilderSvgArcTo)                               \
   PROC(ImpellerPathBuilderTakePathNew)                            \
+  PROC(ImpellerPathContainsPoint)                                 \
+  PROC(ImpellerPathCreateDashedNew)                               \
+  PROC(ImpellerPathCreateOpNew)                                   \
+  PROC(ImpellerPathCreateStrokedNew)                              \
+  PROC(ImpellerPathCreateTransformedNew)                          \
+  PROC(ImpellerPathCreateWithFillTypeNew)                         \
   PROC(ImpellerPathGetBounds)                                     \
+  PROC(ImpellerPathGetFillType)                                   \
+  PROC(ImpellerPathGetTightBounds)                                \
+  PROC(ImpellerPathIsEmpty)                                       \
   PROC(ImpellerPathRelease)                                       \
   PROC(ImpellerPathRetain)                                        \
   PROC(ImpellerSurfaceCreateWrappedFBONew)                        \
@@ -1313,6 +1324,79 @@ class Path : public Object<ImpellerPath, ImpellerPathTraits> {
     gGlobalProcTable.ImpellerPathGetBounds(Get(), &bounds);
     return bounds;
   }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathGetTightBounds
+  ///
+  ImpellerRect GetTightBounds() const {
+    ImpellerRect bounds = {};
+    gGlobalProcTable.ImpellerPathGetTightBounds(Get(), &bounds);
+    return bounds;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathContainsPoint
+  ///
+  bool Contains(const ImpellerPoint& point) const {
+    return gGlobalProcTable.ImpellerPathContainsPoint(Get(), &point);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathIsEmpty
+  ///
+  bool IsEmpty() const { return gGlobalProcTable.ImpellerPathIsEmpty(Get()); }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathGetFillType
+  ///
+  ImpellerFillType GetFillType() const {
+    return gGlobalProcTable.ImpellerPathGetFillType(Get());
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathCreateWithFillTypeNew
+  ///
+  Path WithFillType(ImpellerFillType fill) const {
+    return Path(gGlobalProcTable.ImpellerPathCreateWithFillTypeNew(Get(), fill),
+                AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathCreateTransformedNew
+  ///
+  Path Transformed(const ImpellerMatrix& transform) const {
+    return Path(
+        gGlobalProcTable.ImpellerPathCreateTransformedNew(Get(), &transform),
+        AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathCreateOpNew
+  ///
+  Path Op(const Path& other, ImpellerPathOp op) const {
+    return Path(
+        gGlobalProcTable.ImpellerPathCreateOpNew(Get(), other.Get(), op),
+        AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathCreateStrokedNew
+  ///
+  Path Stroked(const ImpellerStrokeParameters& stroke,
+               float resolution_scale = 1.0f) const {
+    return Path(gGlobalProcTable.ImpellerPathCreateStrokedNew(Get(), &stroke,
+                                                              resolution_scale),
+                AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathCreateDashedNew
+  ///
+  Path Dashed(const std::vector<float>& intervals, float phase = 0.0f) const {
+    return Path(gGlobalProcTable.ImpellerPathCreateDashedNew(
+                    Get(), intervals.data(), intervals.size(), phase),
+                AdoptTag::kAdopt);
+  }
 };
 
 //------------------------------------------------------------------------------
@@ -1379,6 +1463,29 @@ class PathBuilder
                               const ImpellerRoundingRadii& rounding_radii) {
     gGlobalProcTable.ImpellerPathBuilderAddRoundedRect(Get(), &rect,
                                                        &rounding_radii);
+    return *this;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathBuilderAddPath
+  ///
+  PathBuilder& AddPath(const Path& path,
+                       const ImpellerMatrix* transform = nullptr) {
+    gGlobalProcTable.ImpellerPathBuilderAddPath(Get(), path.Get(), transform);
+    return *this;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathBuilderSvgArcTo
+  ///
+  PathBuilder& SvgArcTo(const ImpellerSize& radii,
+                        float x_axis_rotation_degrees,
+                        bool large_arc,
+                        bool clockwise,
+                        const ImpellerPoint& end_point) {
+    gGlobalProcTable.ImpellerPathBuilderSvgArcTo(
+        Get(), &radii, x_axis_rotation_degrees, large_arc, clockwise,
+        &end_point);
     return *this;
   }
 

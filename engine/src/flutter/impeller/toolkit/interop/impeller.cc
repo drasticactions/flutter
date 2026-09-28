@@ -341,6 +341,61 @@ void ImpellerPathGetBounds(ImpellerPath path, ImpellerRect* out_bounds) {
 }
 
 IMPELLER_EXTERN_C
+void ImpellerPathGetTightBounds(ImpellerPath path, ImpellerRect* out_bounds) {
+  *out_bounds = GetPeer(path)->GetTightBounds();
+}
+
+IMPELLER_EXTERN_C
+bool ImpellerPathContainsPoint(ImpellerPath path, const ImpellerPoint* point) {
+  return GetPeer(path)->Contains(ToImpellerType(*point));
+}
+
+IMPELLER_EXTERN_C
+bool ImpellerPathIsEmpty(ImpellerPath path) {
+  return GetPeer(path)->IsEmpty();
+}
+
+IMPELLER_EXTERN_C
+ImpellerFillType ImpellerPathGetFillType(ImpellerPath path) {
+  return GetPeer(path)->GetFillType();
+}
+
+IMPELLER_EXTERN_C
+ImpellerPath ImpellerPathCreateWithFillTypeNew(ImpellerPath path,
+                                               ImpellerFillType fill) {
+  return GetPeer(path)->WithFillType(fill).Leak();
+}
+
+IMPELLER_EXTERN_C
+ImpellerPath ImpellerPathCreateTransformedNew(ImpellerPath path,
+                                              const ImpellerMatrix* transform) {
+  return GetPeer(path)->Transformed(ToImpellerType(*transform)).Leak();
+}
+
+IMPELLER_EXTERN_C
+ImpellerPath ImpellerPathCreateOpNew(ImpellerPath a,
+                                     ImpellerPath b,
+                                     ImpellerPathOp op) {
+  return GetPeer(a)->Op(*GetPeer(b), op).Leak();
+}
+
+IMPELLER_EXTERN_C
+ImpellerPath ImpellerPathCreateStrokedNew(
+    ImpellerPath path,
+    const ImpellerStrokeParameters* stroke,
+    float resolution_scale) {
+  return GetPeer(path)->Stroked(*stroke, resolution_scale).Leak();
+}
+
+IMPELLER_EXTERN_C
+ImpellerPath ImpellerPathCreateDashedNew(ImpellerPath path,
+                                         const float* intervals,
+                                         uint32_t interval_count,
+                                         float phase) {
+  return GetPeer(path)->Dashed(intervals, interval_count, phase).Leak();
+}
+
+IMPELLER_EXTERN_C
 ImpellerPathBuilder ImpellerPathBuilderNew() {
   return Create<PathBuilder>().Leak();
 }
@@ -416,6 +471,33 @@ void ImpellerPathBuilderAddRoundedRect(
     const ImpellerRoundingRadii* rounding_radii) {
   GetPeer(builder)->AddRoundedRect(ToImpellerType(*rect),
                                    ToImpellerType(*rounding_radii));
+}
+
+IMPELLER_EXTERN_C
+void ImpellerPathBuilderAddPath(ImpellerPathBuilder builder,
+                                ImpellerPath path,
+                                const ImpellerMatrix* transform) {
+  if (transform) {
+    const auto matrix = ToImpellerType(*transform);
+    GetPeer(builder)->AddPath(*GetPeer(path), &matrix);
+  } else {
+    GetPeer(builder)->AddPath(*GetPeer(path), nullptr);
+  }
+}
+
+IMPELLER_EXTERN_C
+void ImpellerPathBuilderSvgArcTo(ImpellerPathBuilder builder,
+                                 const ImpellerSize* radii,
+                                 float x_axis_rotation_degrees,
+                                 bool large_arc,
+                                 bool clockwise,
+                                 const ImpellerPoint* end_point) {
+  GetPeer(builder)->SvgArcTo(ToImpellerType(*radii),            //
+                             Degrees{x_axis_rotation_degrees},  //
+                             large_arc,                         //
+                             clockwise,                         //
+                             ToImpellerType(*end_point)         //
+  );
 }
 
 IMPELLER_EXTERN_C

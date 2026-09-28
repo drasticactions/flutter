@@ -887,6 +887,68 @@ TEST_P(InteropPlaygroundTest, CanMeasureMultipleContours) {
   ASSERT_NEAR(closed.GetLength(), 40 + std::sqrt(800.0f), 1e-3);
 }
 
+TEST_P(InteropPlaygroundTest, CanRenderToTexturesAndReadBack) {
+  auto context = GetHPPContext();
+  const ImpellerISize size = {64, 32};
+  auto texture = hpp::Texture::RenderTarget(context, size);
+  ASSERT_TRUE(texture);
+  auto surface = hpp::Surface::WithTexture(context, texture);
+  ASSERT_TRUE(surface);
+
+  // Top half red, bottom-left quarter translucent green, the rest clear.
+  auto dl = hpp::DisplayListBuilder{}
+                .DrawRect({0, 0, 64, 16},
+                          hpp::Paint{}.SetColor({.red = 1.0, .alpha = 1.0}))
+                .DrawRect({0, 16, 32, 16},
+                          hpp::Paint{}.SetColor({.green = 1.0, .alpha = 0.5}))
+                .Build();
+  ASSERT_TRUE(surface.Draw(dl));
+
+  std::vector<uint8_t> pixels(64 * 32 * 4);
+  ASSERT_TRUE(texture.ReadPixels(context, nullptr, pixels.data(), 64 * 4));
+  auto pixel = [&](int x, int y) {
+    const auto* p = &pixels[(y * 64 + x) * 4];
+    return std::array<uint8_t, 4>{p[0], p[1], p[2], p[3]};
+  };
+  ASSERT_EQ(pixel(10, 5), (std::array<uint8_t, 4>{255, 0, 0, 255}));
+  // Premultiplied.
+  ASSERT_NEAR(pixel(10, 25)[1], 128, 1);
+  ASSERT_NEAR(pixel(10, 25)[3], 128, 1);
+  ASSERT_EQ(pixel(10, 25)[0], 0u);
+  ASSERT_EQ(pixel(50, 25), (std::array<uint8_t, 4>{0, 0, 0, 0}));
+
+  // Read a region with padded rows.
+  const ImpellerIRect region = {30, 14, 4, 4};
+  std::vector<uint8_t> sub(4 * 32, 0xAB);
+  ASSERT_TRUE(texture.ReadPixels(context, &region, sub.data(), 32));
+  // (30, 14) is red, (33, 17) is clear.
+  ASSERT_EQ(sub[0], 255u);
+  ASSERT_EQ(sub[3], 255u);
+  ASSERT_EQ(sub[3 * 32 + 3 * 4 + 3], 0u);
+  // Row padding is left untouched.
+  ASSERT_EQ(sub[16], 0xABu);
+
+  // Regions outside the texture are rejected.
+  {
+    ScopedValidationDisable disable_validation;
+    const ImpellerIRect outside = {60, 0, 8, 8};
+    ASSERT_FALSE(texture.ReadPixels(context, &outside, sub.data(), 32));
+  }
+
+  // The texture can be drawn into another display list.
+  auto copy = hpp::Texture::RenderTarget(context, size);
+  auto copy_surface = hpp::Surface::WithTexture(context, copy);
+  ASSERT_TRUE(copy_surface.Draw(
+      hpp::DisplayListBuilder{}
+          .DrawTexture(texture, {0, 0}, kImpellerTextureSamplingNearestNeighbor,
+                       hpp::Paint{})
+          .Build()));
+  std::vector<uint8_t> copied(64 * 32 * 4);
+  ASSERT_TRUE(copy.ReadPixels(context, nullptr, copied.data(), 64 * 4));
+  ASSERT_EQ(copied[(5 * 64 + 10) * 4 + 0], 255u);
+  ASSERT_EQ(copied[(25 * 64 + 50) * 4 + 3], 0u);
+}
+
 TEST_P(InteropPlaygroundTest, CanControlEllipses) {
   hpp::TypographyContext context;
   auto style = hpp::ParagraphStyle{};

@@ -221,15 +221,18 @@ struct Proc {
   PROC(ImpellerPathMeasureRetain)                                 \
   PROC(ImpellerPathRelease)                                       \
   PROC(ImpellerPathRetain)                                        \
+  PROC(ImpellerSurfaceCreateWithTextureNew)                       \
   PROC(ImpellerSurfaceCreateWrappedFBONew)                        \
   PROC(ImpellerSurfaceCreateWrappedMetalDrawableNew)              \
   PROC(ImpellerSurfaceDrawDisplayList)                            \
   PROC(ImpellerSurfacePresent)                                    \
   PROC(ImpellerSurfaceRelease)                                    \
   PROC(ImpellerSurfaceRetain)                                     \
+  PROC(ImpellerTextureCreateRenderTargetNew)                      \
   PROC(ImpellerTextureCreateWithContentsNew)                      \
   PROC(ImpellerTextureCreateWithOpenGLTextureHandleNew)           \
   PROC(ImpellerTextureGetOpenGLHandle)                            \
+  PROC(ImpellerTextureReadPixels)                                 \
   PROC(ImpellerTextureRelease)                                    \
   PROC(ImpellerTextureRetain)                                     \
   PROC(ImpellerTypographyContextNew)                              \
@@ -461,6 +464,29 @@ class Texture : public Object<ImpellerTexture, ImpellerTextureTraits> {
             handle          //
             ),
         AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTextureCreateRenderTargetNew
+  ///
+  static Texture RenderTarget(
+      const Context& context,
+      const ImpellerISize& size,
+      ImpellerPixelFormat format = kImpellerPixelFormatRGBA8888) {
+    return Texture(gGlobalProcTable.ImpellerTextureCreateRenderTargetNew(
+                       context.Get(), &size, format),
+                   AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTextureReadPixels
+  ///
+  bool ReadPixels(const Context& context,
+                  const ImpellerIRect* region,
+                  void* dst,
+                  uint64_t dst_row_bytes) const {
+    return gGlobalProcTable.ImpellerTextureReadPixels(
+        context.Get(), Get(), region, dst, dst_row_bytes);
   }
 
   uint64_t GetOpenGLHandle() const {
@@ -1623,6 +1649,15 @@ class Surface : public Object<ImpellerSurface, ImpellerSurfaceTraits> {
                                                             &size           //
                                                             ),
         AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerSurfaceCreateWithTextureNew
+  ///
+  static Surface WithTexture(const Context& context, const Texture& texture) {
+    return Surface(gGlobalProcTable.ImpellerSurfaceCreateWithTextureNew(
+                       context.Get(), texture.Get()),
+                   AdoptTag::kAdopt);
   }
 
   //----------------------------------------------------------------------------

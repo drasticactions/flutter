@@ -32,11 +32,13 @@ class Surface
 
  protected:
   explicit Surface(Context& context,
-                   std::shared_ptr<impeller::Surface> surface);
+                   std::shared_ptr<impeller::Surface> surface,
+                   bool is_onscreen = true);
 
  private:
   ScopedObject<Context> context_;
   std::shared_ptr<impeller::Surface> surface_;
+  bool is_onscreen_ = true;
   bool is_valid_ = false;
 };
 

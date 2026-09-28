@@ -33,6 +33,7 @@
 #include "impeller/toolkit/interop/path_builder.h"
 #include "impeller/toolkit/interop/path_measure.h"
 #include "impeller/toolkit/interop/surface.h"
+#include "impeller/toolkit/interop/surface_texture.h"
 #include "impeller/toolkit/interop/texture.h"
 #include "impeller/toolkit/interop/typography_context.h"
 
@@ -820,6 +821,45 @@ ImpellerTexture ImpellerTextureCreateWithOpenGLTextureHandleNew(
 }
 
 IMPELLER_EXTERN_C
+ImpellerTexture ImpellerTextureCreateRenderTargetNew(
+    ImpellerContext context,
+    const ImpellerISize* size,
+    ImpellerPixelFormat format) {
+  if (format != kImpellerPixelFormatRGBA8888) {
+    VALIDATION_LOG << "Unsupported pixel format.";
+    return nullptr;
+  }
+  auto texture =
+      Texture::CreateRenderTarget(*GetPeer(context), ToImpellerType(*size));
+  if (!texture) {
+    VALIDATION_LOG << "Could not create render target texture.";
+    return nullptr;
+  }
+  return texture.Leak();
+}
+
+IMPELLER_EXTERN_C
+bool ImpellerTextureReadPixels(ImpellerContext context,
+                               ImpellerTexture texture,
+                               const ImpellerIRect* region,
+                               void* dst,
+                               uint64_t dst_row_bytes) {
+  auto interop_texture = GetPeer(texture);
+  if (!interop_texture->IsValid()) {
+    return false;
+  }
+  const auto read_region =
+      region
+          ? IRect::MakeXYWH(region->x, region->y, region->width, region->height)
+          : IRect::MakeSize(interop_texture->GetTexture()->GetSize());
+  return interop_texture->ReadPixels(*GetPeer(context),                //
+                                     read_region,                      //
+                                     reinterpret_cast<uint8_t*>(dst),  //
+                                     dst_row_bytes                     //
+  );
+}
+
+IMPELLER_EXTERN_C
 void ImpellerTextureRetain(ImpellerTexture texture) {
   ObjectBase::SafeRetain(texture);
 }
@@ -905,6 +945,17 @@ ImpellerSurface ImpellerSurfaceCreateWrappedMetalDrawableNew(
   VALIDATION_LOG << "Metal unavailable.";
   return nullptr;
 #endif  // IMPELLER_ENABLE_METAL
+}
+
+IMPELLER_EXTERN_C
+ImpellerSurface ImpellerSurfaceCreateWithTextureNew(ImpellerContext context,
+                                                    ImpellerTexture texture) {
+  auto surface = Create<SurfaceTexture>(*GetPeer(context), *GetPeer(texture));
+  if (!surface->IsValid()) {
+    VALIDATION_LOG << "Could not create texture surface.";
+    return nullptr;
+  }
+  return surface.Leak();
 }
 
 IMPELLER_EXTERN_C void ImpellerSurfaceRetain(ImpellerSurface surface) {

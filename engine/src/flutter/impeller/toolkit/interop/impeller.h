@@ -547,6 +547,13 @@ typedef struct ImpellerISize {
   int64_t height;
 } ImpellerISize;
 
+typedef struct ImpellerIRect {
+  int64_t x;
+  int64_t y;
+  int64_t width;
+  int64_t height;
+} ImpellerIRect;
+
 typedef struct ImpellerRange {
   uint64_t start;
   uint64_t end;
@@ -918,6 +925,24 @@ IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerSurface IMPELLER_NULLABLE
 ImpellerSurfaceCreateWrappedMetalDrawableNew(
     ImpellerContext IMPELLER_NONNULL context,
     void* IMPELLER_NONNULL metal_drawable);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a surface that renders into a texture created with
+///             `ImpellerTextureCreateRenderTargetNew`.
+///
+///             Drawing a display list onto the surface replaces the contents
+///             of the texture. The surface keeps the texture alive. Surfaces
+///             over textures don't need to be presented.
+///
+/// @param[in]  context  The context. It must be the context the texture was
+///                      created with.
+/// @param[in]  texture  The texture.
+///
+/// @return     The surface if one could be created, NULL otherwise.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerSurface IMPELLER_NULLABLE
+ImpellerSurfaceCreateWithTextureNew(ImpellerContext IMPELLER_NONNULL context,
+                                    ImpellerTexture IMPELLER_NONNULL texture);
 
 //------------------------------------------------------------------------------
 /// @brief      Retain a strong reference to the object. The object can be NULL
@@ -1678,6 +1703,57 @@ ImpellerTextureCreateWithOpenGLTextureHandleNew(
     const ImpellerTextureDescriptor* IMPELLER_NONNULL descriptor,
     uint64_t handle  // transfer-in ownership
 );
+
+//------------------------------------------------------------------------------
+/// @brief      Create a texture that can be rendered into with a surface from
+///             `ImpellerSurfaceCreateWithTextureNew`, drawn in display lists,
+///             and read back with `ImpellerTextureReadPixels`.
+///
+///             The initial contents of the texture are undefined.
+///
+/// @param[in]  context  The context.
+/// @param[in]  size     The size of the texture in pixels.
+/// @param[in]  format   The pixel format that readbacks return. The texture
+///                      may be stored in a different 8-bit per channel
+///                      format that the backend renders to.
+///
+/// @return     The texture if one could be created, NULL otherwise.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerTexture IMPELLER_NULLABLE
+ImpellerTextureCreateRenderTargetNew(ImpellerContext IMPELLER_NONNULL context,
+                                     const ImpellerISize* IMPELLER_NONNULL size,
+                                     ImpellerPixelFormat format);
+
+//------------------------------------------------------------------------------
+/// @brief      Copy pixels of a texture created with
+///             `ImpellerTextureCreateRenderTargetNew` to memory.
+///
+///             This call blocks until all rendering into the texture that was
+///             submitted before it has finished. The rows are copied top to
+///             bottom on every backend. Pixels are 8-bit per channel RGBA with
+///             premultiplied alpha.
+///
+///             With an OpenGL context, the call must happen on the thread
+///             where the context is current.
+///
+/// @param[in]  context        The context the texture was created with.
+/// @param[in]  texture        The texture.
+/// @param[in]  region         The region to read, or NULL for the whole
+///                            texture. It must be inside the texture.
+/// @param[out] dst            The destination. It must hold at least
+///                            `dst_row_bytes` times the region height bytes.
+/// @param[in]  dst_row_bytes  The distance in bytes between the starts of
+///                            consecutive rows in the destination. This must
+///                            be at least four times the region width.
+///
+/// @return     True if the pixels were copied.
+///
+IMPELLER_EXPORT
+bool ImpellerTextureReadPixels(ImpellerContext IMPELLER_NONNULL context,
+                               ImpellerTexture IMPELLER_NONNULL texture,
+                               const ImpellerIRect* IMPELLER_NULLABLE region,
+                               void* IMPELLER_NONNULL dst,
+                               uint64_t dst_row_bytes);
 
 //------------------------------------------------------------------------------
 /// @brief      Retain a strong reference to the object. The object can be NULL

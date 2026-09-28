@@ -11,8 +11,12 @@
 
 namespace impeller::interop {
 
-Surface::Surface(Context& context, std::shared_ptr<impeller::Surface> surface)
-    : context_(Ref(&context)), surface_(std::move(surface)) {
+Surface::Surface(Context& context,
+                 std::shared_ptr<impeller::Surface> surface,
+                 bool is_onscreen)
+    : context_(Ref(&context)),
+      surface_(std::move(surface)),
+      is_onscreen_(is_onscreen) {
   is_valid_ =
       context_ && context_->IsValid() && surface_ && surface_->IsValid();
 }
@@ -35,7 +39,8 @@ bool Surface::DrawDisplayList(const DisplayList& dl) const {
   const auto cull_rect = Rect::MakeSize(surface_->GetSize());
 
   auto result = RenderToTarget(content_context, render_target, display_list,
-                               cull_rect, /*reset_host_buffer=*/true);
+                               cull_rect, /*reset_host_buffer=*/true,
+                               is_onscreen_);
   context_->GetContext()->ResetThreadLocalState();
   return result;
 }

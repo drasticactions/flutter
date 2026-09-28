@@ -27,7 +27,15 @@ class Texture final
 
   Texture& operator=(const Texture&) = delete;
 
+  static ScopedObject<Texture> CreateRenderTarget(const Context& context,
+                                                  ISize size);
+
   bool IsValid() const;
+
+  bool ReadPixels(const Context& context,
+                  const IRect& region,
+                  uint8_t* destination,
+                  uint64_t destination_row_bytes) const;
 
   bool SetContents(const uint8_t* contents, uint64_t length);
 

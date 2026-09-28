@@ -23,7 +23,7 @@ group("wasm") {
 # //flutter/BUILD.gn would drag in the Dart VM).
 wasm_toolchain("impeller_sdk") {
   extra_toolchain_args = {
-    enable_lto = false
+    enable_lto = true
 
     # Match the .NET browser-wasm runtime, which links with Wasm EH/SjLj.
     wasm_use_wasm_sjlj = true

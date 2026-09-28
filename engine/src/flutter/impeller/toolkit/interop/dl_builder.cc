@@ -4,6 +4,7 @@
 
 #include "impeller/toolkit/interop/dl_builder.h"
 
+#include "impeller/display_list/dl_text_impeller.h"
 #include "impeller/toolkit/interop/formats.h"
 
 namespace impeller::interop {
@@ -179,6 +180,40 @@ void DisplayListBuilder::DrawParagraph(const Paragraph& paragraph,
     return;
   }
   handle->Paint(&builder_, point.x, point.y);
+}
+
+void DisplayListBuilder::DrawGlyphs(const Font& font,
+                                    const uint16_t* glyphs,
+                                    const ImpellerPoint* positions,
+                                    uint32_t count,
+                                    Point origin,
+                                    const Paint& paint) {
+  const auto& dl_paint = paint.GetPaint();
+  // Like SkParagraph: color sources need glyph coverage and thick strokes look
+  // better as paths, so draw outlines instead of atlas glyphs.
+  if (dl_paint.getColorSource() ||
+      (dl_paint.getDrawStyle() == flutter::DlDrawStyle::kStroke &&
+       dl_paint.getStrokeWidth() > 4)) {
+    SkPathBuilder outlines;
+    for (uint32_t i = 0; i < count; i++) {
+      if (auto glyph_path = font.GetFont().getPath(glyphs[i])) {
+        outlines.addPath(glyph_path.value(), origin.x + positions[i].x,
+                         origin.y + positions[i].y);
+      }
+    }
+    auto path = outlines.detach();
+    // Glyphs without outlines are color glyphs, which ignore color sources.
+    if (!path.isEmpty()) {
+      builder_.DrawPath(flutter::DlPath(path), dl_paint);
+      return;
+    }
+  }
+  auto blob = font.MakeTextBlob(glyphs, positions, count);
+  if (!blob) {
+    return;
+  }
+  builder_.DrawText(flutter::DlTextImpeller::MakeFromBlob(blob), origin.x,
+                    origin.y, dl_paint);
 }
 
 void DisplayListBuilder::DrawShadow(const Path& path,

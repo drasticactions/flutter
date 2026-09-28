@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "flutter/fml/mapping.h"
 #include "flutter/fml/native_library.h"
 #include "flutter/fml/string_conversion.h"
 #include "flutter/testing/testing.h"
@@ -947,6 +948,152 @@ TEST_P(InteropPlaygroundTest, CanRenderToTexturesAndReadBack) {
   ASSERT_TRUE(copy.ReadPixels(context, nullptr, copied.data(), 64 * 4));
   ASSERT_EQ(copied[(5 * 64 + 10) * 4 + 0], 255u);
   ASSERT_EQ(copied[(25 * 64 + 50) * 4 + 3], 0u);
+}
+
+static hpp::Typeface LoadFixtureTypeface(const char* name) {
+  auto fixture = flutter::testing::OpenFixtureAsMapping(name);
+  if (!fixture) {
+    return hpp::Typeface(nullptr, hpp::AdoptTag::kAdopt);
+  }
+  auto mapping = std::make_unique<hpp::Mapping>(
+      fixture->GetMapping(), fixture->GetSize(),
+      [data = std::shared_ptr<fml::Mapping>(std::move(fixture))]() {});
+  return hpp::Typeface::WithData(std::move(mapping));
+}
+
+static constexpr uint32_t MakeTag(char a, char b, char c, char d) {
+  return (static_cast<uint32_t>(a) << 24) | (static_cast<uint32_t>(b) << 16) |
+         (static_cast<uint32_t>(c) << 8) | static_cast<uint32_t>(d);
+}
+
+// The first glyph whose ink is at least the given size.
+static uint16_t FindInkedGlyph(const hpp::Font& font, float min_size) {
+  for (uint16_t glyph = 1u; glyph < 500u; glyph++) {
+    const auto bounds = font.GetGlyphBounds({glyph})[0];
+    if (bounds.width >= min_size && bounds.height >= min_size) {
+      return glyph;
+    }
+  }
+  return 0u;
+}
+
+TEST_P(InteropPlaygroundTest, CanCreateTypefaces) {
+  auto typeface = LoadFixtureTypeface("Roboto-Regular.ttf");
+  ASSERT_TRUE(typeface);
+  ASSERT_EQ(typeface.GetUnitsPerEm(), 2048u);
+  // The head table is always 54 bytes.
+  ASSERT_EQ(typeface.CopyTableData(MakeTag('h', 'e', 'a', 'd')).size(), 54u);
+  ASSERT_TRUE(typeface.CopyTableData(MakeTag('z', 'z', 'z', 'z')).empty());
+
+  auto fixture = flutter::testing::OpenFixtureAsMapping("Roboto-Regular.ttf");
+  uint32_t face_index = 99u;
+  const auto data = typeface.CopyData(&face_index);
+  ASSERT_EQ(data.size(), fixture->GetSize());
+  ASSERT_EQ(face_index, 0u);
+  ASSERT_EQ(::memcmp(data.data(), fixture->GetMapping(), data.size()), 0);
+
+  {
+    ScopedValidationDisable disable_validation;
+    const uint8_t garbage[] = {1, 2, 3, 4};
+    ASSERT_FALSE(hpp::Typeface::WithData(
+        std::make_unique<hpp::Mapping>(garbage, sizeof(garbage), nullptr)));
+  }
+}
+
+TEST_P(InteropPlaygroundTest, GlyphPathsMatchGlyphBounds) {
+  auto typeface = LoadFixtureTypeface("Roboto-Regular.ttf");
+  hpp::Font font(typeface, 100);
+  const auto glyph = FindInkedGlyph(font, 40);
+  ASSERT_NE(glyph, 0u);
+  const auto path = font.CreateGlyphPath(glyph);
+  ASSERT_TRUE(path);
+  const auto path_bounds = path.GetTightBounds();
+  const auto bounds = font.GetGlyphBounds({glyph})[0];
+  // Paths are Y-down with the origin on the baseline.
+  ASSERT_LT(bounds.y, -50);
+  // Glyph bounds are rounded out to whole pixels.
+  ASSERT_NEAR(path_bounds.x, bounds.x, 2.0);
+  ASSERT_NEAR(path_bounds.y, bounds.y, 2.0);
+  ASSERT_NEAR(path_bounds.width, bounds.width, 2.0);
+  ASSERT_NEAR(path_bounds.height, bounds.height, 2.0);
+
+  // Synthetic styles change the outlines.
+  font.SetEmbolden(true);
+  ASSERT_GT(font.CreateGlyphPath(glyph).GetTightBounds().width,
+            path_bounds.width);
+  font.SetEmbolden(false);
+  font.SetSkewX(-0.25f);
+  const auto skewed = font.CreateGlyphPath(glyph).GetTightBounds();
+  ASSERT_GT(skewed.width, path_bounds.width);
+}
+
+TEST_P(InteropPlaygroundTest, CanApplyFontVariations) {
+  auto typeface = LoadFixtureTypeface("RobotoSlab-VariableFont_wght.ttf");
+  ASSERT_TRUE(typeface);
+  const auto wght = MakeTag('w', 'g', 'h', 't');
+  auto thin = typeface.WithVariations({{wght, 100}});
+  auto black = typeface.WithVariations({{wght, 900}});
+  ASSERT_TRUE(thin);
+  ASSERT_TRUE(black);
+  // Heavier weights are wider.
+  const auto glyph = FindInkedGlyph(hpp::Font(thin, 100), 40);
+  ASSERT_NE(glyph, 0u);
+  const auto thin_bounds =
+      hpp::Font(thin, 100).CreateGlyphPath(glyph).GetTightBounds();
+  const auto black_bounds =
+      hpp::Font(black, 100).CreateGlyphPath(glyph).GetTightBounds();
+  ASSERT_GT(black_bounds.width, thin_bounds.width + 1);
+}
+
+TEST_P(InteropPlaygroundTest, CanDrawGlyphs) {
+  auto typeface = LoadFixtureTypeface("ahem.ttf");
+  ASSERT_TRUE(typeface);
+  hpp::Font font(typeface, 20);
+  // Find a glyph with ink. Every Ahem glyph with ink is an em box from 0.8em
+  // above the baseline to 0.2em below it.
+  const auto glyph = FindInkedGlyph(font, 19);
+  ASSERT_NE(glyph, 0u);
+
+  auto context = GetHPPContext();
+  auto texture = hpp::Texture::RenderTarget(context, {64, 64});
+  auto surface = hpp::Surface::WithTexture(context, texture);
+  ASSERT_TRUE(surface);
+  // Two glyphs at (10, 40) and (40, 40): boxes over x 10..30 and 40..60,
+  // y 24..44.
+  auto paint = hpp::Paint{}.SetColor({.blue = 1.0, .alpha = 1.0});
+  auto dl =
+      hpp::DisplayListBuilder{}
+          .DrawGlyphs(font, {glyph, glyph}, {{0, 0}, {30, 0}}, {10, 40}, paint)
+          .Build();
+  ASSERT_TRUE(surface.Draw(dl));
+  std::vector<uint8_t> pixels(64 * 64 * 4);
+  ASSERT_TRUE(texture.ReadPixels(context, nullptr, pixels.data(), 64 * 4));
+  auto alpha = [&](int x, int y) { return pixels[(y * 64 + x) * 4 + 3]; };
+  auto blue = [&](int x, int y) { return pixels[(y * 64 + x) * 4 + 2]; };
+  ASSERT_EQ(alpha(20, 34), 255u);
+  ASSERT_EQ(blue(20, 34), 255u);
+  ASSERT_EQ(alpha(50, 34), 255u);
+  ASSERT_EQ(alpha(35, 34), 0u);
+  ASSERT_EQ(alpha(20, 20), 0u);
+  ASSERT_EQ(alpha(20, 48), 0u);
+
+  // Color sources draw outlines.
+  const ImpellerColor colors[] = {{.red = 1.0, .alpha = 1.0},
+                                  {.red = 1.0, .alpha = 1.0}};
+  const float stops[] = {0.0, 1.0};
+  auto gradient = hpp::ColorSource::LinearGradient(
+      {0, 0}, {64, 0}, 2, colors, stops, kImpellerTileModeClamp);
+  auto gradient_paint = hpp::Paint{};
+  gradient_paint.SetColorSource(gradient);
+  auto gradient_dl =
+      hpp::DisplayListBuilder{}
+          .DrawGlyphs(font, {glyph}, {{0, 0}}, {10, 40}, gradient_paint)
+          .Build();
+  ASSERT_TRUE(surface.Draw(gradient_dl));
+  ASSERT_TRUE(texture.ReadPixels(context, nullptr, pixels.data(), 64 * 4));
+  ASSERT_EQ(alpha(20, 34), 255u);
+  ASSERT_GE(pixels[(34 * 64 + 20) * 4 + 0], 250u);
+  ASSERT_EQ(alpha(50, 34), 0u);
 }
 
 TEST_P(InteropPlaygroundTest, CanControlEllipses) {

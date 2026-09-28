@@ -18,6 +18,7 @@
 #include "impeller/toolkit/interop/color_source.h"
 #include "impeller/toolkit/interop/context.h"
 #include "impeller/toolkit/interop/dl_builder.h"
+#include "impeller/toolkit/interop/font.h"
 #include "impeller/toolkit/interop/formats.h"
 #include "impeller/toolkit/interop/fragment_program.h"
 #include "impeller/toolkit/interop/glyph_info.h"
@@ -35,6 +36,7 @@
 #include "impeller/toolkit/interop/surface.h"
 #include "impeller/toolkit/interop/surface_texture.h"
 #include "impeller/toolkit/interop/texture.h"
+#include "impeller/toolkit/interop/typeface.h"
 #include "impeller/toolkit/interop/typography_context.h"
 
 #if IMPELLER_ENABLE_OPENGLES
@@ -65,6 +67,7 @@ DEFINE_PEER_GETTER(ColorSource, ImpellerColorSource);
 DEFINE_PEER_GETTER(Context, ImpellerContext);
 DEFINE_PEER_GETTER(DisplayList, ImpellerDisplayList);
 DEFINE_PEER_GETTER(DisplayListBuilder, ImpellerDisplayListBuilder);
+DEFINE_PEER_GETTER(Font, ImpellerFont);
 DEFINE_PEER_GETTER(FragmentProgram, ImpellerFragmentProgram);
 DEFINE_PEER_GETTER(GlyphInfo, ImpellerGlyphInfo);
 DEFINE_PEER_GETTER(ImageFilter, ImpellerImageFilter);
@@ -82,6 +85,7 @@ DEFINE_PEER_GETTER(Surface, ImpellerSurface);
 DEFINE_PEER_GETTER(SwapchainVK, ImpellerVulkanSwapchain);
 #endif  // IMPELLER_ENABLE_VULKAN
 DEFINE_PEER_GETTER(Texture, ImpellerTexture);
+DEFINE_PEER_GETTER(Typeface, ImpellerTypeface);
 DEFINE_PEER_GETTER(TypographyContext, ImpellerTypographyContext);
 
 static std::string GetVersionAsString(uint32_t version) {
@@ -1595,6 +1599,125 @@ bool ImpellerTypographyContextRegisterFont(ImpellerTypographyContext context,
   );
   return GetPeer(context)->RegisterFont(std::move(wrapped_contents),
                                         family_name_alias);
+}
+
+static std::unique_ptr<fml::Mapping> WrapMapping(
+    const ImpellerMapping* contents,
+    void* contents_on_release_user_data) {
+  return std::make_unique<fml::NonOwnedMapping>(
+      contents->data,    // data ptr
+      contents->length,  // data length
+      [on_release = contents->on_release, contents_on_release_user_data](auto,
+                                                                         auto) {
+        if (on_release) {
+          on_release(contents_on_release_user_data);
+        }
+      }  // release callback
+  );
+}
+
+IMPELLER_EXTERN_C
+ImpellerTypeface ImpellerTypefaceCreateWithDataNew(
+    const ImpellerMapping* contents,
+    void* contents_on_release_user_data,
+    uint32_t face_index) {
+  return Typeface::Make(WrapMapping(contents, contents_on_release_user_data),
+                        face_index)
+      .Leak();
+}
+
+IMPELLER_EXTERN_C
+ImpellerTypeface ImpellerTypefaceCreateWithVariationsNew(
+    ImpellerTypeface typeface,
+    const ImpellerFontVariation* variations,
+    uint32_t count) {
+  return GetPeer(typeface)->WithVariations(variations, count).Leak();
+}
+
+IMPELLER_EXTERN_C
+void ImpellerTypefaceRetain(ImpellerTypeface typeface) {
+  ObjectBase::SafeRetain(typeface);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerTypefaceRelease(ImpellerTypeface typeface) {
+  ObjectBase::SafeRelease(typeface);
+}
+
+IMPELLER_EXTERN_C
+uint32_t ImpellerTypefaceGetUnitsPerEm(ImpellerTypeface typeface) {
+  return GetPeer(typeface)->GetUnitsPerEm();
+}
+
+IMPELLER_EXTERN_C
+uint64_t ImpellerTypefaceCopyTableData(ImpellerTypeface typeface,
+                                       uint32_t tag,
+                                       void* dst,
+                                       uint64_t dst_size) {
+  return GetPeer(typeface)->CopyTableData(tag, dst, dst_size);
+}
+
+IMPELLER_EXTERN_C
+uint64_t ImpellerTypefaceCopyData(ImpellerTypeface typeface,
+                                  void* dst,
+                                  uint64_t dst_size,
+                                  uint32_t* out_face_index) {
+  return GetPeer(typeface)->CopyData(dst, dst_size, out_face_index);
+}
+
+IMPELLER_EXTERN_C
+ImpellerFont ImpellerFontNew(ImpellerTypeface typeface, float size) {
+  return Create<Font>(*GetPeer(typeface), size).Leak();
+}
+
+IMPELLER_EXTERN_C
+void ImpellerFontRetain(ImpellerFont font) {
+  ObjectBase::SafeRetain(font);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerFontRelease(ImpellerFont font) {
+  ObjectBase::SafeRelease(font);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerFontSetSkewX(ImpellerFont font, float skew) {
+  GetPeer(font)->SetSkewX(skew);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerFontSetEmbolden(ImpellerFont font, bool embolden) {
+  GetPeer(font)->SetEmbolden(embolden);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerFontSetSubpixel(ImpellerFont font, bool subpixel) {
+  GetPeer(font)->SetSubpixel(subpixel);
+}
+
+IMPELLER_EXTERN_C
+ImpellerPath ImpellerFontCreateGlyphPathNew(ImpellerFont font, uint16_t glyph) {
+  return GetPeer(font)->CreateGlyphPath(glyph).Leak();
+}
+
+IMPELLER_EXTERN_C
+void ImpellerFontGetGlyphBounds(ImpellerFont font,
+                                const uint16_t* glyphs,
+                                uint32_t count,
+                                ImpellerRect* out_bounds) {
+  GetPeer(font)->GetGlyphBounds(glyphs, count, out_bounds);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerDisplayListBuilderDrawGlyphs(ImpellerDisplayListBuilder builder,
+                                          ImpellerFont font,
+                                          const uint16_t* glyphs,
+                                          const ImpellerPoint* positions,
+                                          uint32_t count,
+                                          const ImpellerPoint* origin,
+                                          ImpellerPaint paint) {
+  GetPeer(builder)->DrawGlyphs(*GetPeer(font), glyphs, positions, count,
+                               ToImpellerType(*origin), *GetPeer(paint));
 }
 
 IMPELLER_EXTERN_C

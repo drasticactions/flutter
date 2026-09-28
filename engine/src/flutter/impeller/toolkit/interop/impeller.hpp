@@ -5,6 +5,7 @@
 #ifndef FLUTTER_IMPELLER_TOOLKIT_INTEROP_IMPELLER_HPP_
 #define FLUTTER_IMPELLER_TOOLKIT_INTEROP_IMPELLER_HPP_
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
@@ -71,6 +72,7 @@ struct Proc {
   PROC(ImpellerDisplayListBuilderCreateDisplayListNew)            \
   PROC(ImpellerDisplayListBuilderDrawDashedLine)                  \
   PROC(ImpellerDisplayListBuilderDrawDisplayList)                 \
+  PROC(ImpellerDisplayListBuilderDrawGlyphs)                      \
   PROC(ImpellerDisplayListBuilderDrawLine)                        \
   PROC(ImpellerDisplayListBuilderDrawOval)                        \
   PROC(ImpellerDisplayListBuilderDrawPaint)                       \
@@ -99,6 +101,14 @@ struct Proc {
   PROC(ImpellerDisplayListBuilderTranslate)                       \
   PROC(ImpellerDisplayListRelease)                                \
   PROC(ImpellerDisplayListRetain)                                 \
+  PROC(ImpellerFontCreateGlyphPathNew)                            \
+  PROC(ImpellerFontGetGlyphBounds)                                \
+  PROC(ImpellerFontNew)                                           \
+  PROC(ImpellerFontRelease)                                       \
+  PROC(ImpellerFontRetain)                                        \
+  PROC(ImpellerFontSetEmbolden)                                   \
+  PROC(ImpellerFontSetSkewX)                                      \
+  PROC(ImpellerFontSetSubpixel)                                   \
   PROC(ImpellerFragmentProgramNew)                                \
   PROC(ImpellerFragmentProgramRelease)                            \
   PROC(ImpellerFragmentProgramRetain)                             \
@@ -235,6 +245,13 @@ struct Proc {
   PROC(ImpellerTextureReadPixels)                                 \
   PROC(ImpellerTextureRelease)                                    \
   PROC(ImpellerTextureRetain)                                     \
+  PROC(ImpellerTypefaceCopyData)                                  \
+  PROC(ImpellerTypefaceCopyTableData)                             \
+  PROC(ImpellerTypefaceCreateWithDataNew)                         \
+  PROC(ImpellerTypefaceCreateWithVariationsNew)                   \
+  PROC(ImpellerTypefaceGetUnitsPerEm)                             \
+  PROC(ImpellerTypefaceRelease)                                   \
+  PROC(ImpellerTypefaceRetain)                                    \
   PROC(ImpellerTypographyContextNew)                              \
   PROC(ImpellerTypographyContextRegisterFont)                     \
   PROC(ImpellerTypographyContextRelease)                          \
@@ -339,6 +356,7 @@ IMPELLER_HPP_DEFINE_TRAITS(ImpellerColorSource);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerContext);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerDisplayList);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerDisplayListBuilder);
+IMPELLER_HPP_DEFINE_TRAITS(ImpellerFont);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerFragmentProgram);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerGlyphInfo);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerImageFilter);
@@ -353,6 +371,7 @@ IMPELLER_HPP_DEFINE_TRAITS(ImpellerPathBuilder);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerPathMeasure);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerSurface);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerTexture);
+IMPELLER_HPP_DEFINE_TRAITS(ImpellerTypeface);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerTypographyContext);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerVulkanSwapchain);
 
@@ -1617,6 +1636,125 @@ class PathMeasure
 };
 
 //------------------------------------------------------------------------------
+/// @see      ImpellerTypeface
+///
+class Typeface : public Object<ImpellerTypeface, ImpellerTypefaceTraits> {
+ public:
+  Typeface(ImpellerTypeface typeface, AdoptTag tag) : Object(typeface, tag) {}
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypefaceCreateWithDataNew
+  ///
+  static Typeface WithData(std::unique_ptr<Mapping> mapping,
+                           uint32_t face_index = 0u) {
+    if (!mapping) {
+      return Typeface(nullptr, AdoptTag::kAdopt);
+    }
+    ImpellerMapping c_mapping = {};
+    c_mapping.data = mapping->GetMapping();
+    c_mapping.length = mapping->GetSize();
+    c_mapping.on_release = [](void* user_data) {
+      delete reinterpret_cast<Mapping*>(user_data);
+    };
+    return Typeface(gGlobalProcTable.ImpellerTypefaceCreateWithDataNew(
+                        &c_mapping, mapping.release(), face_index),
+                    AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypefaceCreateWithVariationsNew
+  ///
+  Typeface WithVariations(
+      const std::vector<ImpellerFontVariation>& variations) const {
+    return Typeface(gGlobalProcTable.ImpellerTypefaceCreateWithVariationsNew(
+                        Get(), variations.data(), variations.size()),
+                    AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypefaceGetUnitsPerEm
+  ///
+  uint32_t GetUnitsPerEm() const {
+    return gGlobalProcTable.ImpellerTypefaceGetUnitsPerEm(Get());
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypefaceCopyTableData
+  ///
+  std::vector<uint8_t> CopyTableData(uint32_t tag) const {
+    std::vector<uint8_t> data(
+        gGlobalProcTable.ImpellerTypefaceCopyTableData(Get(), tag, nullptr, 0));
+    data.resize(gGlobalProcTable.ImpellerTypefaceCopyTableData(
+        Get(), tag, data.data(), data.size()));
+    return data;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerTypefaceCopyData
+  ///
+  std::vector<uint8_t> CopyData(uint32_t* face_index = nullptr) const {
+    std::vector<uint8_t> data(gGlobalProcTable.ImpellerTypefaceCopyData(
+        Get(), nullptr, 0, face_index));
+    data.resize(gGlobalProcTable.ImpellerTypefaceCopyData(
+        Get(), data.data(), data.size(), face_index));
+    return data;
+  }
+};
+
+//------------------------------------------------------------------------------
+/// @see      ImpellerFont
+///
+class Font : public Object<ImpellerFont, ImpellerFontTraits> {
+ public:
+  Font(const Typeface& typeface, float size)
+      : Object(gGlobalProcTable.ImpellerFontNew(typeface.Get(), size),
+               AdoptTag::kAdopt) {}
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerFontSetSkewX
+  ///
+  Font& SetSkewX(float skew) {
+    gGlobalProcTable.ImpellerFontSetSkewX(Get(), skew);
+    return *this;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerFontSetEmbolden
+  ///
+  Font& SetEmbolden(bool embolden) {
+    gGlobalProcTable.ImpellerFontSetEmbolden(Get(), embolden);
+    return *this;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerFontSetSubpixel
+  ///
+  Font& SetSubpixel(bool subpixel) {
+    gGlobalProcTable.ImpellerFontSetSubpixel(Get(), subpixel);
+    return *this;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerFontCreateGlyphPathNew
+  ///
+  Path CreateGlyphPath(uint16_t glyph) const {
+    return Path(gGlobalProcTable.ImpellerFontCreateGlyphPathNew(Get(), glyph),
+                AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerFontGetGlyphBounds
+  ///
+  std::vector<ImpellerRect> GetGlyphBounds(
+      const std::vector<uint16_t>& glyphs) const {
+    std::vector<ImpellerRect> bounds(glyphs.size());
+    gGlobalProcTable.ImpellerFontGetGlyphBounds(Get(), glyphs.data(),
+                                                glyphs.size(), bounds.data());
+    return bounds;
+  }
+};
+
+//------------------------------------------------------------------------------
 /// @see      ImpellerDisplayList
 ///
 class DisplayList
@@ -1875,6 +2013,20 @@ class DisplayListBuilder : public Object<ImpellerDisplayListBuilder,
   DisplayListBuilder& DrawPath(const Path& path, const Paint& paint) {
     gGlobalProcTable.ImpellerDisplayListBuilderDrawPath(Get(), path.Get(),
                                                         paint.Get());
+    return *this;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerDisplayListBuilderDrawGlyphs
+  ///
+  DisplayListBuilder& DrawGlyphs(const Font& font,
+                                 const std::vector<uint16_t>& glyphs,
+                                 const std::vector<ImpellerPoint>& positions,
+                                 const ImpellerPoint& origin,
+                                 const Paint& paint) {
+    gGlobalProcTable.ImpellerDisplayListBuilderDrawGlyphs(
+        Get(), font.Get(), glyphs.data(), positions.data(),
+        std::min(glyphs.size(), positions.size()), &origin, paint.Get());
     return *this;
   }
 

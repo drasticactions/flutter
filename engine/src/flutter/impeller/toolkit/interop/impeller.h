@@ -223,6 +223,24 @@ IMPELLER_DEFINE_HANDLE(ImpellerMaskFilter);
 IMPELLER_DEFINE_HANDLE(ImpellerTypographyContext);
 
 //------------------------------------------------------------------------------
+/// A typeface is a font face loaded from font data: a specific weight, style
+/// and set of variation axis values of a font family.
+///
+/// Typefaces are immutable and thread-safe.
+///
+IMPELLER_DEFINE_HANDLE(ImpellerTypeface);
+
+//------------------------------------------------------------------------------
+/// A font is a typeface at a size, with optional synthetic styling. Fonts are
+/// used to draw glyphs that were shaped by the user, and to get glyph outlines
+/// and bounds.
+///
+/// Fonts are not thread-safe. They must be created, used, and collected on a
+/// single thread.
+///
+IMPELLER_DEFINE_HANDLE(ImpellerFont);
+
+//------------------------------------------------------------------------------
 /// An immutable, fully laid out paragraph.
 ///
 IMPELLER_DEFINE_HANDLE(ImpellerParagraph);
@@ -691,6 +709,17 @@ typedef struct ImpellerStrokeParameters {
   /// The limit at which miter joins become bevel joins.
   float miter_limit;
 } ImpellerStrokeParameters;
+
+//------------------------------------------------------------------------------
+/// A value on a variation axis of a variable font.
+///
+typedef struct ImpellerFontVariation {
+  /// The four byte axis tag, for example `'wght'` packed big-endian as
+  /// `('w' << 24) | ('g' << 16) | ('h' << 8) | 't'`.
+  uint32_t axis_tag;
+  /// The value on the axis.
+  float value;
+} ImpellerFontVariation;
 
 typedef struct ImpellerTextDecoration {
   /// A mask of `ImpellerTextDecorationType`s to enable.
@@ -2650,6 +2679,34 @@ void ImpellerDisplayListBuilderDrawParagraph(
     const ImpellerPoint* IMPELLER_NONNULL point);
 
 //------------------------------------------------------------------------------
+/// @brief      Draw glyphs that were shaped by the user, for example with
+///             HarfBuzz.
+///
+///             Glyphs are drawn with Impeller's glyph atlas, including color
+///             and bitmap glyphs. If the paint has a color source, or is a
+///             stroke wider than four units, glyph outlines are drawn as paths
+///             instead.
+///
+/// @param[in]  builder    The display list builder.
+/// @param[in]  font       The font.
+/// @param[in]  glyphs     The glyph indices.
+/// @param[in]  positions  The baseline origin of each glyph, relative to
+///                        `origin`.
+/// @param[in]  count      The number of glyphs.
+/// @param[in]  origin     The origin of the glyph run.
+/// @param[in]  paint      The paint.
+///
+IMPELLER_EXPORT
+void ImpellerDisplayListBuilderDrawGlyphs(
+    ImpellerDisplayListBuilder IMPELLER_NONNULL builder,
+    ImpellerFont IMPELLER_NONNULL font,
+    const uint16_t* IMPELLER_NONNULL glyphs,
+    const ImpellerPoint* IMPELLER_NONNULL positions,
+    uint32_t count,
+    const ImpellerPoint* IMPELLER_NONNULL origin,
+    ImpellerPaint IMPELLER_NONNULL paint);
+
+//------------------------------------------------------------------------------
 /// @brief      Draw a shadow for a Path given a material elevation. If the
 ///             occluding object is not opaque, additional hints (via the
 ///             `occluder_is_transparent` argument) must be provided to render
@@ -2791,6 +2848,215 @@ bool ImpellerTypographyContextRegisterFont(
     const ImpellerMapping* IMPELLER_NONNULL contents,
     void* IMPELLER_NULLABLE contents_on_release_user_data,
     const char* IMPELLER_NULLABLE family_name_alias);
+
+//------------------------------------------------------------------------------
+// Typeface
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+/// @brief      Create a typeface from font data. TrueType, OpenType and font
+///             collection files are supported.
+///
+/// @param[in]  contents                       The font data.
+/// @param[in]  contents_on_release_user_data  The user data baton passed to
+///                                            the release callback of the
+///                                            contents.
+/// @param[in]  face_index                     The index of the face in a font
+///                                            collection. Zero for other
+///                                            fonts.
+///
+/// @return     The typeface, or NULL if the data isn't a supported font.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerTypeface IMPELLER_NULLABLE
+ImpellerTypefaceCreateWithDataNew(
+    const ImpellerMapping* IMPELLER_NONNULL contents,
+    void* IMPELLER_NULLABLE contents_on_release_user_data,
+    uint32_t face_index);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a typeface with different values on the variation axes
+///             of a variable font. Axes that aren't specified keep their
+///             values.
+///
+/// @param[in]  typeface    The typeface.
+/// @param[in]  variations  The axis values.
+/// @param[in]  count       The number of axis values.
+///
+/// @return     The new typeface, or NULL if the variations can't be applied.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerTypeface IMPELLER_NULLABLE
+ImpellerTypefaceCreateWithVariationsNew(
+    ImpellerTypeface IMPELLER_NONNULL typeface,
+    const ImpellerFontVariation* IMPELLER_NONNULL variations,
+    uint32_t count);
+
+//------------------------------------------------------------------------------
+/// @brief      Retain a strong reference to the object. The object can be NULL
+///             in which case this method is a no-op.
+///
+/// @param[in]  typeface  The typeface.
+///
+IMPELLER_EXPORT
+void ImpellerTypefaceRetain(ImpellerTypeface IMPELLER_NULLABLE typeface);
+
+//------------------------------------------------------------------------------
+/// @brief      Release a previously retained reference to the object. The
+///             object can be NULL in which case this method is a no-op.
+///
+/// @param[in]  typeface  The typeface.
+///
+IMPELLER_EXPORT
+void ImpellerTypefaceRelease(ImpellerTypeface IMPELLER_NULLABLE typeface);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the number of font design units per em of the typeface.
+///
+/// @param[in]  typeface  The typeface.
+///
+/// @return     The units per em, or zero if unknown.
+///
+IMPELLER_EXPORT
+uint32_t ImpellerTypefaceGetUnitsPerEm(
+    ImpellerTypeface IMPELLER_NONNULL typeface);
+
+//------------------------------------------------------------------------------
+/// @brief      Copy the data of a font table, for example for a text shaper.
+///
+///             Call with a NULL destination to get the size of the table.
+///
+/// @param[in]  typeface  The typeface.
+/// @param[in]  tag       The four byte table tag, packed big-endian.
+/// @param[out] dst       The destination, or NULL.
+/// @param[in]  dst_size  The size of the destination in bytes.
+///
+/// @return     If the destination is NULL, the size of the table. Otherwise,
+///             the number of bytes copied. Zero if the typeface has no such
+///             table.
+///
+IMPELLER_EXPORT
+uint64_t ImpellerTypefaceCopyTableData(ImpellerTypeface IMPELLER_NONNULL
+                                           typeface,
+                                       uint32_t tag,
+                                       void* IMPELLER_NULLABLE dst,
+                                       uint64_t dst_size);
+
+//------------------------------------------------------------------------------
+/// @brief      Copy the font file data the typeface was loaded from.
+///
+///             Call with a NULL destination to get the size of the data.
+///
+/// @param[in]  typeface        The typeface.
+/// @param[out] dst             The destination, or NULL.
+/// @param[in]  dst_size        The size of the destination in bytes.
+/// @param[out] out_face_index  The index of the face in the data, if the
+///                             data is a font collection. May be NULL.
+///
+/// @return     If the destination is NULL, the size of the data. Otherwise,
+///             the number of bytes copied. Zero if the data isn't available.
+///
+IMPELLER_EXPORT
+uint64_t ImpellerTypefaceCopyData(ImpellerTypeface IMPELLER_NONNULL typeface,
+                                  void* IMPELLER_NULLABLE dst,
+                                  uint64_t dst_size,
+                                  uint32_t* IMPELLER_NULLABLE out_face_index);
+
+//------------------------------------------------------------------------------
+// Font
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+/// @brief      Create a font for a typeface at a size.
+///
+///             Glyphs are anti-aliased in grayscale, lightly hinted and
+///             positioned with subpixel precision.
+///
+/// @param[in]  typeface  The typeface.
+/// @param[in]  size      The size in points (the em size).
+///
+/// @return     The font.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerFont IMPELLER_NULLABLE
+ImpellerFontNew(ImpellerTypeface IMPELLER_NONNULL typeface, float size);
+
+//------------------------------------------------------------------------------
+/// @brief      Retain a strong reference to the object. The object can be NULL
+///             in which case this method is a no-op.
+///
+/// @param[in]  font  The font.
+///
+IMPELLER_EXPORT
+void ImpellerFontRetain(ImpellerFont IMPELLER_NULLABLE font);
+
+//------------------------------------------------------------------------------
+/// @brief      Release a previously retained reference to the object. The
+///             object can be NULL in which case this method is a no-op.
+///
+/// @param[in]  font  The font.
+///
+IMPELLER_EXPORT
+void ImpellerFontRelease(ImpellerFont IMPELLER_NULLABLE font);
+
+//------------------------------------------------------------------------------
+/// @brief      Set the horizontal skew of the glyphs, for synthetic oblique
+///             styles. A negative skew leans glyphs to the right.
+///
+/// @param[in]  font  The font.
+/// @param[in]  skew  The skew. Zero by default.
+///
+IMPELLER_EXPORT
+void ImpellerFontSetSkewX(ImpellerFont IMPELLER_NONNULL font, float skew);
+
+//------------------------------------------------------------------------------
+/// @brief      Set whether glyph outlines are thickened, for synthetic bold
+///             styles.
+///
+/// @param[in]  font      The font.
+/// @param[in]  embolden  Whether to thicken the glyphs. False by default.
+///
+IMPELLER_EXPORT
+void ImpellerFontSetEmbolden(ImpellerFont IMPELLER_NONNULL font, bool embolden);
+
+//------------------------------------------------------------------------------
+/// @brief      Set whether glyphs are positioned with subpixel precision.
+///
+/// @param[in]  font      The font.
+/// @param[in]  subpixel  Whether to use subpixel positioning. True by
+///                       default.
+///
+IMPELLER_EXPORT
+void ImpellerFontSetSubpixel(ImpellerFont IMPELLER_NONNULL font, bool subpixel);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a path of the outline of a glyph. The path is scaled to
+///             the font size, with Y pointing down and the origin on the
+///             baseline at the start of the glyph.
+///
+/// @param[in]  font   The font.
+/// @param[in]  glyph  The glyph index.
+///
+/// @return     The outline, or NULL if the glyph has no outline (for example,
+///             a bitmap glyph).
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
+ImpellerFontCreateGlyphPathNew(ImpellerFont IMPELLER_NONNULL font,
+                               uint16_t glyph);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the bounds of the outlines of glyphs relative to their
+///             origins on the baseline, scaled to the font size. Hinting
+///             doesn't change them.
+///
+/// @param[in]  font        The font.
+/// @param[in]  glyphs      The glyph indices.
+/// @param[in]  count       The number of glyphs.
+/// @param[out] out_bounds  The bounds of each glyph. Must have room for
+///                         `count` rectangles.
+///
+IMPELLER_EXPORT
+void ImpellerFontGetGlyphBounds(ImpellerFont IMPELLER_NONNULL font,
+                                const uint16_t* IMPELLER_NONNULL glyphs,
+                                uint32_t count,
+                                ImpellerRect* IMPELLER_NONNULL out_bounds);
 
 //------------------------------------------------------------------------------
 // Paragraph Style

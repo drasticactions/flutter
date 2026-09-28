@@ -39,6 +39,8 @@ impeller_component("interop_base") {
     "dl.h",
     "dl_builder.cc",
     "dl_builder.h",
+    "font.cc",
+    "font.h",
     "formats.cc",
     "formats.h",
     "fragment_program.cc",
@@ -73,6 +75,8 @@ impeller_component("interop_base") {
     "surface_texture.h",
     "texture.cc",
     "texture.h",
+    "typeface.cc",
+    "typeface.h",
     "typography_context.cc",
     "typography_context.h",
   ]

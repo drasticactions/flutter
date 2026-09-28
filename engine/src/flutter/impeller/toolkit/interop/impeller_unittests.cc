@@ -1179,6 +1179,108 @@ TEST_P(InteropPlaygroundTest, CanMatchCharactersInRegisteredFonts) {
   ASSERT_EQ(emoji.GetFamilyName(), "Noto Color Emoji");
 }
 
+static hpp::ImageDecoder LoadFixtureImage(const char* name) {
+  auto fixture = flutter::testing::OpenFixtureAsMapping(name);
+  if (!fixture) {
+    return hpp::ImageDecoder(nullptr, hpp::AdoptTag::kAdopt);
+  }
+  auto mapping = std::make_unique<hpp::Mapping>(
+      fixture->GetMapping(), fixture->GetSize(),
+      [data = std::shared_ptr<fml::Mapping>(std::move(fixture))]() {});
+  return hpp::ImageDecoder::WithData(std::move(mapping));
+}
+
+TEST_P(InteropPlaygroundTest, CanDecodeImages) {
+  auto jpeg = LoadFixtureImage("boston.jpg");
+  ASSERT_TRUE(jpeg);
+  auto size = jpeg.GetSize();
+  ASSERT_EQ(size.width, 983);
+  ASSERT_EQ(size.height, 609);
+  std::vector<uint8_t> pixels(size.width * size.height * 4);
+  ASSERT_TRUE(jpeg.Decode(nullptr, pixels.data(), size.width * 4));
+  ASSERT_EQ(pixels[(300 * size.width + 500) * 4 + 3], 255u);
+
+  // Scaled decodes produce the requested size.
+  const ImpellerISize scaled = {100, 62};
+  std::vector<uint8_t> small(100 * 62 * 4, 0u);
+  ASSERT_TRUE(jpeg.Decode(&scaled, small.data(), 100 * 4));
+  ASSERT_EQ(small[(61 * 100 + 99) * 4 + 3], 255u);
+  // The scaled image looks like the original.
+  for (int channel = 0; channel < 3; channel++) {
+    const int original = pixels[(300 * size.width + 500) * 4 + channel];
+    const int reduced = small[(30 * 100 + 50) * 4 + channel];
+    ASSERT_NEAR(original, reduced, 40);
+  }
+
+  auto png = LoadFixtureImage("table_mountain_nx.png");
+  ASSERT_TRUE(png);
+  size = png.GetSize();
+  ASSERT_EQ(size.width, 256);
+  ASSERT_EQ(size.height, 256);
+
+  {
+    ScopedValidationDisable disable_validation;
+    const uint8_t garbage[] = {1, 2, 3, 4};
+    ASSERT_FALSE(hpp::ImageDecoder::WithData(
+        std::make_unique<hpp::Mapping>(garbage, sizeof(garbage), nullptr)));
+  }
+}
+
+TEST_P(InteropPlaygroundTest, CanEncodeImages) {
+  // A 4x2 image: opaque red, green, blue, white, then half transparent
+  // (premultiplied) red, and three clear pixels.
+  const std::vector<uint8_t> pixels = {
+      255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+      128, 0, 0, 128, 0, 0,   0, 0,   0, 0, 0,   0,   0,   0,   0,   0,
+  };
+  const ImpellerISize size = {4, 2};
+
+  std::vector<uint8_t> png;
+  ASSERT_TRUE(hpp::EncodeImage(pixels.data(), size, 16, kImpellerImageFormatPNG,
+                               9, png));
+  ASSERT_GT(png.size(), 8u);
+  ASSERT_EQ(png[1], 'P');
+  auto decoder = hpp::ImageDecoder::WithData(
+      std::make_unique<hpp::Mapping>(png.data(), png.size(), nullptr));
+  ASSERT_TRUE(decoder);
+  ASSERT_EQ(decoder.GetSize().width, 4);
+  std::vector<uint8_t> decoded(32);
+  ASSERT_TRUE(decoder.Decode(nullptr, decoded.data(), 16));
+  for (size_t i = 0; i < pixels.size(); i++) {
+    ASSERT_NEAR(decoded[i], pixels[i], 1) << "byte " << i;
+  }
+
+  std::vector<uint8_t> jpeg;
+  ASSERT_TRUE(hpp::EncodeImage(pixels.data(), size, 16,
+                               kImpellerImageFormatJPEG, 90, jpeg));
+  ASSERT_EQ(jpeg[0], 0xFF);
+  ASSERT_EQ(jpeg[1], 0xD8);
+
+  std::vector<uint8_t> webp;
+  ASSERT_TRUE(hpp::EncodeImage(pixels.data(), size, 16,
+                               kImpellerImageFormatWebP, 100, webp));
+  auto webp_decoder = hpp::ImageDecoder::WithData(
+      std::make_unique<hpp::Mapping>(webp.data(), webp.size(), nullptr));
+  ASSERT_TRUE(webp_decoder);
+  ASSERT_TRUE(webp_decoder.Decode(nullptr, decoded.data(), 16));
+  // Lossless.
+  ASSERT_EQ(decoded[0], 255u);
+  ASSERT_EQ(decoded[5], 255u);
+}
+
+TEST_P(InteropPlaygroundTest, PNGCompressionLevelChangesTheSize) {
+  const ImpellerISize size = {64, 64};
+  const std::vector<uint8_t> pixels(size.width * size.height * 4, 255);
+  std::vector<uint8_t> stored;
+  ASSERT_TRUE(hpp::EncodeImage(pixels.data(), size, size.width * 4,
+                               kImpellerImageFormatPNG, 0, stored));
+  std::vector<uint8_t> compressed;
+  ASSERT_TRUE(hpp::EncodeImage(pixels.data(), size, size.width * 4,
+                               kImpellerImageFormatPNG, 9, compressed));
+  ASSERT_GT(stored.size(), pixels.size());
+  ASSERT_LT(compressed.size(), stored.size() / 10);
+}
+
 TEST_P(InteropPlaygroundTest, CanControlEllipses) {
   hpp::TypographyContext context;
   auto style = hpp::ParagraphStyle{};

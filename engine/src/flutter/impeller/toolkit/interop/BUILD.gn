@@ -47,6 +47,8 @@ impeller_component("interop_base") {
     "fragment_program.h",
     "glyph_info.cc",
     "glyph_info.h",
+    "image_decoder.cc",
+    "image_decoder.h",
     "image_filter.cc",
     "image_filter.h",
     "line_metrics.cc",

@@ -23,6 +23,7 @@
 #include "impeller/toolkit/interop/formats.h"
 #include "impeller/toolkit/interop/fragment_program.h"
 #include "impeller/toolkit/interop/glyph_info.h"
+#include "impeller/toolkit/interop/image_decoder.h"
 #include "impeller/toolkit/interop/image_filter.h"
 #include "impeller/toolkit/interop/line_metrics.h"
 #include "impeller/toolkit/interop/mask_filter.h"
@@ -71,6 +72,7 @@ DEFINE_PEER_GETTER(DisplayListBuilder, ImpellerDisplayListBuilder);
 DEFINE_PEER_GETTER(Font, ImpellerFont);
 DEFINE_PEER_GETTER(FragmentProgram, ImpellerFragmentProgram);
 DEFINE_PEER_GETTER(GlyphInfo, ImpellerGlyphInfo);
+DEFINE_PEER_GETTER(ImageDecoder, ImpellerImageDecoder);
 DEFINE_PEER_GETTER(ImageFilter, ImpellerImageFilter);
 DEFINE_PEER_GETTER(LineMetrics, ImpellerLineMetrics);
 DEFINE_PEER_GETTER(MaskFilter, ImpellerMaskFilter);
@@ -1615,6 +1617,53 @@ static std::unique_ptr<fml::Mapping> WrapMapping(
         }
       }  // release callback
   );
+}
+
+IMPELLER_EXTERN_C
+ImpellerImageDecoder ImpellerImageDecoderNew(const ImpellerMapping* contents,
+                                             void* on_release_user_data) {
+  return ImageDecoder::Make(WrapMapping(contents, on_release_user_data)).Leak();
+}
+
+IMPELLER_EXTERN_C
+void ImpellerImageDecoderRetain(ImpellerImageDecoder decoder) {
+  ObjectBase::SafeRetain(decoder);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerImageDecoderRelease(ImpellerImageDecoder decoder) {
+  ObjectBase::SafeRelease(decoder);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerImageDecoderGetSize(ImpellerImageDecoder decoder,
+                                 ImpellerISize* out_size) {
+  const auto size = GetPeer(decoder)->GetSize();
+  *out_size = ImpellerISize{size.width, size.height};
+}
+
+IMPELLER_EXTERN_C
+bool ImpellerImageDecoderDecode(ImpellerImageDecoder decoder,
+                                const ImpellerISize* target_size,
+                                void* dst,
+                                uint64_t dst_row_bytes) {
+  const auto size =
+      target_size ? ToImpellerType(*target_size) : GetPeer(decoder)->GetSize();
+  return GetPeer(decoder)->Decode(size, reinterpret_cast<uint8_t*>(dst),
+                                  dst_row_bytes);
+}
+
+IMPELLER_EXTERN_C
+bool ImpellerImageEncode(const void* rgba_premul,
+                         const ImpellerISize* size,
+                         uint64_t row_bytes,
+                         ImpellerImageFormat format,
+                         uint32_t quality,
+                         ImpellerWriteCallback write,
+                         void* user_data) {
+  return EncodeImage(reinterpret_cast<const uint8_t*>(rgba_premul),
+                     ToImpellerType(*size), row_bytes, format, quality, write,
+                     user_data);
 }
 
 IMPELLER_EXTERN_C

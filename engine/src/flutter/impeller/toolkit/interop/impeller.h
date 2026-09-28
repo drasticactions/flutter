@@ -241,6 +241,16 @@ IMPELLER_DEFINE_HANDLE(ImpellerTypeface);
 IMPELLER_DEFINE_HANDLE(ImpellerFont);
 
 //------------------------------------------------------------------------------
+/// An image decoder reads the size of compressed image data (PNG, JPEG, WebP,
+/// GIF, BMP, WBMP or ICO) and decodes it to pixels. Animated images decode
+/// their first frame.
+///
+/// Image decoders are not thread-safe. They must be created, used, and
+/// collected on a single thread.
+///
+IMPELLER_DEFINE_HANDLE(ImpellerImageDecoder);
+
+//------------------------------------------------------------------------------
 /// An immutable, fully laid out paragraph.
 ///
 IMPELLER_DEFINE_HANDLE(ImpellerParagraph);
@@ -390,6 +400,15 @@ typedef void* IMPELLER_NULLABLE (*ImpellerVulkanProcAddressCallback)(
     void* IMPELLER_NULLABLE user_data);
 
 //------------------------------------------------------------------------------
+/// A callback that receives a chunk of encoded data. A user supplied baton
+/// that is uninterpreted by Impeller is passed back to the user. The callback
+/// is invoked on the calling thread, before the call that takes it returns.
+///
+typedef void (*ImpellerWriteCallback)(const void* IMPELLER_NONNULL data,
+                                      uint64_t size,
+                                      void* IMPELLER_NULLABLE user_data);
+
+//------------------------------------------------------------------------------
 // Enumerations
 // -----------------------------------------------------------------------------
 typedef enum ImpellerFillType {
@@ -468,6 +487,12 @@ typedef enum ImpellerStrokeJoin {
 typedef enum ImpellerPixelFormat {
   kImpellerPixelFormatRGBA8888,
 } ImpellerPixelFormat;
+
+typedef enum ImpellerImageFormat {
+  kImpellerImageFormatPNG,
+  kImpellerImageFormatJPEG,
+  kImpellerImageFormatWebP,
+} ImpellerImageFormat;
 
 typedef enum ImpellerTextureSampling {
   kImpellerTextureSamplingNearestNeighbor,
@@ -1832,6 +1857,109 @@ void ImpellerTextureRelease(ImpellerTexture IMPELLER_NULLABLE texture);
 IMPELLER_EXPORT
 uint64_t ImpellerTextureGetOpenGLHandle(
     ImpellerTexture IMPELLER_NONNULL texture);
+
+//------------------------------------------------------------------------------
+// Image Codecs
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+/// @brief      Create an image decoder for compressed image data.
+///
+/// @param[in]  contents               The compressed image data.
+/// @param[in]  on_release_user_data   The user data baton passed to the
+///                                    release callback of the contents.
+///
+/// @return     The decoder, or NULL if the data isn't a supported image.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerImageDecoder IMPELLER_NULLABLE
+ImpellerImageDecoderNew(const ImpellerMapping* IMPELLER_NONNULL contents,
+                        void* IMPELLER_NULLABLE on_release_user_data);
+
+//------------------------------------------------------------------------------
+/// @brief      Retain a strong reference to the object. The object can be NULL
+///             in which case this method is a no-op.
+///
+/// @param[in]  decoder  The image decoder.
+///
+IMPELLER_EXPORT
+void ImpellerImageDecoderRetain(ImpellerImageDecoder IMPELLER_NULLABLE decoder);
+
+//------------------------------------------------------------------------------
+/// @brief      Release a previously retained reference to the object. The
+///             object can be NULL in which case this method is a no-op.
+///
+/// @param[in]  decoder  The image decoder.
+///
+IMPELLER_EXPORT
+void ImpellerImageDecoderRelease(
+    ImpellerImageDecoder IMPELLER_NULLABLE decoder);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the size of the image in pixels.
+///
+/// @param[in]  decoder   The image decoder.
+/// @param[out] out_size  The size.
+///
+IMPELLER_EXPORT
+void ImpellerImageDecoderGetSize(ImpellerImageDecoder IMPELLER_NONNULL decoder,
+                                 ImpellerISize* IMPELLER_NONNULL out_size);
+
+//------------------------------------------------------------------------------
+/// @brief      Decode the image to 8-bit per channel RGBA with premultiplied
+///             alpha in the sRGB color space, with rows top to bottom.
+///
+///             Images are scaled to the target size, using the codec's own
+///             scaling where it can. The orientation stored in the image (for
+///             example EXIF) is not applied. Incomplete images decode as far as
+///             the data goes.
+///
+/// @param[in]  decoder        The image decoder.
+/// @param[in]  target_size    The size to decode to, or NULL for the size of
+///                            the image.
+/// @param[out] dst            The destination. It must hold at least
+///                            `dst_row_bytes` times the height bytes.
+/// @param[in]  dst_row_bytes  The distance in bytes between the starts of
+///                            consecutive rows. This must be at least four
+///                            times the width.
+///
+/// @return     True if the image was decoded.
+///
+IMPELLER_EXPORT
+bool ImpellerImageDecoderDecode(ImpellerImageDecoder IMPELLER_NONNULL decoder,
+                                const ImpellerISize* IMPELLER_NULLABLE
+                                    target_size,
+                                void* IMPELLER_NONNULL dst,
+                                uint64_t dst_row_bytes);
+
+//------------------------------------------------------------------------------
+/// @brief      Encode 8-bit per channel RGBA pixels with premultiplied alpha
+///             in the sRGB color space, with rows top to bottom.
+///
+///             Not every build has every encoder. Unavailable formats fail.
+///             JPEG drops the alpha channel.
+///
+/// @param[in]  rgba_premul  The pixels.
+/// @param[in]  size         The size of the image in pixels.
+/// @param[in]  row_bytes    The distance in bytes between the starts of
+///                          consecutive rows.
+/// @param[in]  format       The format to encode to.
+/// @param[in]  quality      For PNG, the zlib compression level from 0 (none)
+///                          to 9 (smallest). For JPEG and WebP, the quality
+///                          from 0 to 100. WebP at 100 is lossless.
+/// @param[in]  write        The callback that receives the encoded data. It may
+///                          be called many times.
+/// @param[in]  user_data    The baton passed to the callback.
+///
+/// @return     True if the image was encoded.
+///
+IMPELLER_EXPORT
+bool ImpellerImageEncode(const void* IMPELLER_NONNULL rgba_premul,
+                         const ImpellerISize* IMPELLER_NONNULL size,
+                         uint64_t row_bytes,
+                         ImpellerImageFormat format,
+                         uint32_t quality,
+                         ImpellerWriteCallback IMPELLER_NONNULL write,
+                         void* IMPELLER_NULLABLE user_data);
 
 //------------------------------------------------------------------------------
 // Fragment Program

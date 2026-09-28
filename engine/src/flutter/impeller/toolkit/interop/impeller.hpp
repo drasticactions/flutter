@@ -120,6 +120,12 @@ struct Proc {
   PROC(ImpellerGlyphInfoIsEllipsis)                               \
   PROC(ImpellerGlyphInfoRelease)                                  \
   PROC(ImpellerGlyphInfoRetain)                                   \
+  PROC(ImpellerImageDecoderDecode)                                \
+  PROC(ImpellerImageDecoderGetSize)                               \
+  PROC(ImpellerImageDecoderNew)                                   \
+  PROC(ImpellerImageDecoderRelease)                               \
+  PROC(ImpellerImageDecoderRetain)                                \
+  PROC(ImpellerImageEncode)                                       \
   PROC(ImpellerImageFilterCreateBlurNew)                          \
   PROC(ImpellerImageFilterCreateComposeNew)                       \
   PROC(ImpellerImageFilterCreateDilateNew)                        \
@@ -366,6 +372,7 @@ IMPELLER_HPP_DEFINE_TRAITS(ImpellerDisplayListBuilder);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerFont);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerFragmentProgram);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerGlyphInfo);
+IMPELLER_HPP_DEFINE_TRAITS(ImpellerImageDecoder);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerImageFilter);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerLineMetrics);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerMaskFilter);
@@ -1673,6 +1680,72 @@ class PathMeasure
     return gGlobalProcTable.ImpellerPathMeasureNextContour(Get());
   }
 };
+
+//------------------------------------------------------------------------------
+/// @see      ImpellerImageDecoder
+///
+class ImageDecoder
+    : public Object<ImpellerImageDecoder, ImpellerImageDecoderTraits> {
+ public:
+  ImageDecoder(ImpellerImageDecoder decoder, AdoptTag tag)
+      : Object(decoder, tag) {}
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerImageDecoderNew
+  ///
+  static ImageDecoder WithData(std::unique_ptr<Mapping> mapping) {
+    if (!mapping) {
+      return ImageDecoder(nullptr, AdoptTag::kAdopt);
+    }
+    ImpellerMapping c_mapping = {};
+    c_mapping.data = mapping->GetMapping();
+    c_mapping.length = mapping->GetSize();
+    c_mapping.on_release = [](void* user_data) {
+      delete reinterpret_cast<Mapping*>(user_data);
+    };
+    return ImageDecoder(
+        gGlobalProcTable.ImpellerImageDecoderNew(&c_mapping, mapping.release()),
+        AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerImageDecoderGetSize
+  ///
+  ImpellerISize GetSize() const {
+    ImpellerISize size = {};
+    gGlobalProcTable.ImpellerImageDecoderGetSize(Get(), &size);
+    return size;
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerImageDecoderDecode
+  ///
+  bool Decode(const ImpellerISize* target_size,
+              void* dst,
+              uint64_t dst_row_bytes) {
+    return gGlobalProcTable.ImpellerImageDecoderDecode(Get(), target_size, dst,
+                                                       dst_row_bytes);
+  }
+};
+
+//------------------------------------------------------------------------------
+/// @see      ImpellerImageEncode
+///
+inline bool EncodeImage(const void* rgba_premul,
+                        const ImpellerISize& size,
+                        uint64_t row_bytes,
+                        ImpellerImageFormat format,
+                        uint32_t quality,
+                        std::vector<uint8_t>& encoded) {
+  return gGlobalProcTable.ImpellerImageEncode(
+      rgba_premul, &size, row_bytes, format, quality,
+      [](const void* data, uint64_t size, void* user_data) {
+        auto bytes = reinterpret_cast<const uint8_t*>(data);
+        auto out = reinterpret_cast<std::vector<uint8_t>*>(user_data);
+        out->insert(out->end(), bytes, bytes + size);
+      },
+      &encoded);
+}
 
 //------------------------------------------------------------------------------
 /// @see      ImpellerTypeface

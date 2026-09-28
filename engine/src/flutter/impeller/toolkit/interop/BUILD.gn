@@ -65,6 +65,8 @@ impeller_component("interop_base") {
     "path.h",
     "path_builder.cc",
     "path_builder.h",
+    "path_measure.cc",
+    "path_measure.h",
     "surface.cc",
     "surface.h",
     "texture.cc",

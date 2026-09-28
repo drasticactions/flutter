@@ -212,6 +212,13 @@ struct Proc {
   PROC(ImpellerPathGetFillType)                                   \
   PROC(ImpellerPathGetTightBounds)                                \
   PROC(ImpellerPathIsEmpty)                                       \
+  PROC(ImpellerPathMeasureCreateSegmentNew)                       \
+  PROC(ImpellerPathMeasureGetLength)                              \
+  PROC(ImpellerPathMeasureGetPositionAndTangent)                  \
+  PROC(ImpellerPathMeasureNew)                                    \
+  PROC(ImpellerPathMeasureNextContour)                            \
+  PROC(ImpellerPathMeasureRelease)                                \
+  PROC(ImpellerPathMeasureRetain)                                 \
   PROC(ImpellerPathRelease)                                       \
   PROC(ImpellerPathRetain)                                        \
   PROC(ImpellerSurfaceCreateWrappedFBONew)                        \
@@ -340,6 +347,7 @@ IMPELLER_HPP_DEFINE_TRAITS(ImpellerParagraphBuilder);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerParagraphStyle);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerPath);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerPathBuilder);
+IMPELLER_HPP_DEFINE_TRAITS(ImpellerPathMeasure);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerSurface);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerTexture);
 IMPELLER_HPP_DEFINE_TRAITS(ImpellerTypographyContext);
@@ -1532,6 +1540,53 @@ class PathBuilder
     gGlobalProcTable.ImpellerPathBuilderQuadraticCurveTo(Get(), &control_point,
                                                          &end_point);
     return *this;
+  }
+};
+
+//------------------------------------------------------------------------------
+/// @see      ImpellerPathMeasure
+///
+class PathMeasure
+    : public Object<ImpellerPathMeasure, ImpellerPathMeasureTraits> {
+ public:
+  explicit PathMeasure(const Path& path, bool force_closed = false)
+      : Object(
+            gGlobalProcTable.ImpellerPathMeasureNew(path.Get(), force_closed),
+            AdoptTag::kAdopt) {}
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathMeasureGetLength
+  ///
+  float GetLength() const {
+    return gGlobalProcTable.ImpellerPathMeasureGetLength(Get());
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathMeasureGetPositionAndTangent
+  ///
+  bool GetPositionAndTangent(float distance,
+                             ImpellerPoint& position,
+                             ImpellerPoint& tangent) const {
+    return gGlobalProcTable.ImpellerPathMeasureGetPositionAndTangent(
+        Get(), distance, &position, &tangent);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathMeasureCreateSegmentNew
+  ///
+  Path CreateSegment(float start,
+                     float stop,
+                     bool start_with_move_to = true) const {
+    return Path(gGlobalProcTable.ImpellerPathMeasureCreateSegmentNew(
+                    Get(), start, stop, start_with_move_to),
+                AdoptTag::kAdopt);
+  }
+
+  //----------------------------------------------------------------------------
+  /// @see      ImpellerPathMeasureNextContour
+  ///
+  bool NextContour() {
+    return gGlobalProcTable.ImpellerPathMeasureNextContour(Get());
   }
 };
 

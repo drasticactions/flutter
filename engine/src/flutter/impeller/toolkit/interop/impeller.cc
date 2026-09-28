@@ -31,6 +31,7 @@
 #include "impeller/toolkit/interop/paragraph_style.h"
 #include "impeller/toolkit/interop/path.h"
 #include "impeller/toolkit/interop/path_builder.h"
+#include "impeller/toolkit/interop/path_measure.h"
 #include "impeller/toolkit/interop/surface.h"
 #include "impeller/toolkit/interop/texture.h"
 #include "impeller/toolkit/interop/typography_context.h"
@@ -74,6 +75,7 @@ DEFINE_PEER_GETTER(ParagraphBuilder, ImpellerParagraphBuilder);
 DEFINE_PEER_GETTER(ParagraphStyle, ImpellerParagraphStyle);
 DEFINE_PEER_GETTER(Path, ImpellerPath);
 DEFINE_PEER_GETTER(PathBuilder, ImpellerPathBuilder);
+DEFINE_PEER_GETTER(PathMeasure, ImpellerPathMeasure);
 DEFINE_PEER_GETTER(Surface, ImpellerSurface);
 #if IMPELLER_ENABLE_VULKAN
 DEFINE_PEER_GETTER(SwapchainVK, ImpellerVulkanSwapchain);
@@ -515,6 +517,57 @@ IMPELLER_EXTERN_C
 ImpellerPath ImpellerPathBuilderTakePathNew(ImpellerPathBuilder builder,
                                             ImpellerFillType fill) {
   return GetPeer(builder)->TakePath(ToImpellerType(fill)).Leak();
+}
+
+IMPELLER_EXTERN_C
+ImpellerPathMeasure ImpellerPathMeasureNew(ImpellerPath path,
+                                           bool force_closed) {
+  return Create<PathMeasure>(*GetPeer(path), force_closed).Leak();
+}
+
+IMPELLER_EXTERN_C
+void ImpellerPathMeasureRetain(ImpellerPathMeasure measure) {
+  ObjectBase::SafeRetain(measure);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerPathMeasureRelease(ImpellerPathMeasure measure) {
+  ObjectBase::SafeRelease(measure);
+}
+
+IMPELLER_EXTERN_C
+float ImpellerPathMeasureGetLength(ImpellerPathMeasure measure) {
+  return GetPeer(measure)->GetLength();
+}
+
+IMPELLER_EXTERN_C
+bool ImpellerPathMeasureGetPositionAndTangent(ImpellerPathMeasure measure,
+                                              float distance,
+                                              ImpellerPoint* out_position,
+                                              ImpellerPoint* out_tangent) {
+  Point position;
+  Point tangent;
+  if (!GetPeer(measure)->GetPositionAndTangent(distance, position, tangent)) {
+    return false;
+  }
+  *out_position = ImpellerPoint{position.x, position.y};
+  *out_tangent = ImpellerPoint{tangent.x, tangent.y};
+  return true;
+}
+
+IMPELLER_EXTERN_C
+ImpellerPath ImpellerPathMeasureCreateSegmentNew(ImpellerPathMeasure measure,
+                                                 float start,
+                                                 float stop,
+                                                 bool start_with_move_to) {
+  return GetPeer(measure)
+      ->CreateSegment(start, stop, start_with_move_to)
+      .Leak();
+}
+
+IMPELLER_EXTERN_C
+bool ImpellerPathMeasureNextContour(ImpellerPathMeasure measure) {
+  return GetPeer(measure)->NextContour();
 }
 
 IMPELLER_EXTERN_C

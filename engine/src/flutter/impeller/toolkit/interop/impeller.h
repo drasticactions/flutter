@@ -279,6 +279,19 @@ IMPELLER_DEFINE_HANDLE(ImpellerPath);
 IMPELLER_DEFINE_HANDLE(ImpellerPathBuilder);
 
 //------------------------------------------------------------------------------
+/// Path measures compute the lengths of the contours of a path and find
+/// positions, tangents and segments along them.
+///
+/// A path measure works on one contour at a time. It starts on the first
+/// contour of the path and `ImpellerPathMeasureNextContour` moves it to the
+/// next one.
+///
+/// Path measures are not thread-safe. They must be created, used, and
+/// collected on a single thread.
+///
+IMPELLER_DEFINE_HANDLE(ImpellerPathMeasure);
+
+//------------------------------------------------------------------------------
 /// A surface represents a render target for Impeller to direct the rendering
 /// intent specified the form of display lists to.
 ///
@@ -1335,6 +1348,104 @@ ImpellerPathBuilderCopyPathNew(ImpellerPathBuilder IMPELLER_NONNULL builder,
 IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
 ImpellerPathBuilderTakePathNew(ImpellerPathBuilder IMPELLER_NONNULL builder,
                                ImpellerFillType fill);
+
+//------------------------------------------------------------------------------
+// Path Measure
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+/// @brief      Create a new path measure positioned on the first contour of
+///             the path.
+///
+/// @param[in]  path          The path. Later changes to the path builder
+///                           that made it have no effect.
+/// @param[in]  force_closed  Measure open contours as if they were closed.
+///
+/// @return     The path measure.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPathMeasure IMPELLER_NULLABLE
+ImpellerPathMeasureNew(ImpellerPath IMPELLER_NONNULL path, bool force_closed);
+
+//------------------------------------------------------------------------------
+/// @brief      Retain a strong reference to the object. The object can be NULL
+///             in which case this method is a no-op.
+///
+/// @param[in]  measure  The path measure.
+///
+IMPELLER_EXPORT
+void ImpellerPathMeasureRetain(ImpellerPathMeasure IMPELLER_NULLABLE measure);
+
+//------------------------------------------------------------------------------
+/// @brief      Release a previously retained reference to the object. The
+///             object can be NULL in which case this method is a no-op.
+///
+/// @param[in]  measure  The path measure.
+///
+IMPELLER_EXPORT
+void ImpellerPathMeasureRelease(ImpellerPathMeasure IMPELLER_NULLABLE measure);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the length of the current contour.
+///
+/// @param[in]  measure  The path measure.
+///
+/// @return     The length, or zero if there is no current contour.
+///
+IMPELLER_EXPORT
+float ImpellerPathMeasureGetLength(
+    ImpellerPathMeasure IMPELLER_NONNULL measure);
+
+//------------------------------------------------------------------------------
+/// @brief      Get the position and unit tangent at a distance along the
+///             current contour. The distance is clamped to the contour.
+///
+/// @param[in]  measure       The path measure.
+/// @param[in]  distance      The distance from the start of the contour.
+/// @param[out] out_position  The position.
+/// @param[out] out_tangent   The unit tangent.
+///
+/// @return     True if there is a current contour with a non-zero length.
+///
+IMPELLER_EXPORT
+bool ImpellerPathMeasureGetPositionAndTangent(
+    ImpellerPathMeasure IMPELLER_NONNULL measure,
+    float distance,
+    ImpellerPoint* IMPELLER_NONNULL out_position,
+    ImpellerPoint* IMPELLER_NONNULL out_tangent);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a path from the part of the current contour between two
+///             distances. The distances are clamped to the contour.
+///
+/// @param[in]  measure             The path measure.
+/// @param[in]  start               The start distance.
+/// @param[in]  stop                The stop distance.
+/// @param[in]  start_with_move_to  Begin the segment with a move to its start
+///                                 point. If false, the segment starts with a
+///                                 line from the origin, which is useful when
+///                                 joining segments with
+///                                 `ImpellerPathBuilderAddPath`.
+///
+/// @return     The segment, or NULL if there is no current contour or the
+///             start is after the stop.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerPath IMPELLER_NULLABLE
+ImpellerPathMeasureCreateSegmentNew(ImpellerPathMeasure IMPELLER_NONNULL
+                                        measure,
+                                    float start,
+                                    float stop,
+                                    bool start_with_move_to);
+
+//------------------------------------------------------------------------------
+/// @brief      Move to the next contour of the path.
+///
+/// @param[in]  measure  The path measure.
+///
+/// @return     True if there is a next contour.
+///
+IMPELLER_EXPORT
+bool ImpellerPathMeasureNextContour(
+    ImpellerPathMeasure IMPELLER_NONNULL measure);
 
 //------------------------------------------------------------------------------
 // Paint

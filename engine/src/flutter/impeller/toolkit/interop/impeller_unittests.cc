@@ -825,6 +825,68 @@ TEST_P(InteropPlaygroundTest, CanAddSvgArcs) {
   ASSERT_NEAR(bounds.height, 50, 1e-3);
 }
 
+TEST_P(InteropPlaygroundTest, CanMeasurePaths) {
+  const auto line = hpp::PathBuilder{}.MoveTo({0, 0}).LineTo({30, 40}).Build();
+  hpp::PathMeasure measure(line);
+  ASSERT_TRUE(measure);
+  ASSERT_FLOAT_EQ(measure.GetLength(), 50);
+
+  ImpellerPoint position = {};
+  ImpellerPoint tangent = {};
+  ASSERT_TRUE(measure.GetPositionAndTangent(25, position, tangent));
+  ASSERT_FLOAT_EQ(position.x, 15);
+  ASSERT_FLOAT_EQ(position.y, 20);
+  ASSERT_FLOAT_EQ(tangent.x, 0.6f);
+  ASSERT_FLOAT_EQ(tangent.y, 0.8f);
+
+  // Distances are clamped to the contour.
+  ASSERT_TRUE(measure.GetPositionAndTangent(100, position, tangent));
+  ASSERT_FLOAT_EQ(position.x, 30);
+  ASSERT_FLOAT_EQ(position.y, 40);
+
+  const auto segment = measure.CreateSegment(10, 35);
+  ASSERT_TRUE(segment);
+  hpp::PathMeasure segment_measure(segment);
+  ASSERT_NEAR(segment_measure.GetLength(), 25, 1e-4);
+  const auto bounds = segment.GetTightBounds();
+  ASSERT_NEAR(bounds.x, 6, 1e-4);
+  ASSERT_NEAR(bounds.y, 8, 1e-4);
+
+  // Reversed segments are NULL.
+  ASSERT_FALSE(measure.CreateSegment(30, 20));
+
+  ASSERT_FALSE(measure.NextContour());
+  ASSERT_FLOAT_EQ(measure.GetLength(), 0);
+  ASSERT_FALSE(measure.GetPositionAndTangent(0, position, tangent));
+}
+
+TEST_P(InteropPlaygroundTest, CanMeasureCircles) {
+  const auto circle = hpp::PathBuilder{}.AddOval({0, 0, 100, 100}).Build();
+  hpp::PathMeasure measure(circle);
+  // Curves are measured by approximation.
+  ASSERT_NEAR(measure.GetLength(), 100 * kPi, 1.0);
+}
+
+TEST_P(InteropPlaygroundTest, CanMeasureMultipleContours) {
+  const auto path = hpp::PathBuilder{}
+                        .MoveTo({0, 0})
+                        .LineTo({10, 0})
+                        .MoveTo({0, 10})
+                        .LineTo({0, 30})
+                        .LineTo({20, 30})
+                        .Build();
+  hpp::PathMeasure measure(path);
+  ASSERT_FLOAT_EQ(measure.GetLength(), 10);
+  ASSERT_TRUE(measure.NextContour());
+  ASSERT_FLOAT_EQ(measure.GetLength(), 40);
+  ASSERT_FALSE(measure.NextContour());
+
+  // Forcing contours closed adds the closing segment.
+  hpp::PathMeasure closed(path, true);
+  ASSERT_TRUE(closed.NextContour());
+  ASSERT_NEAR(closed.GetLength(), 40 + std::sqrt(800.0f), 1e-3);
+}
+
 TEST_P(InteropPlaygroundTest, CanControlEllipses) {
   hpp::TypographyContext context;
   auto style = hpp::ParagraphStyle{};

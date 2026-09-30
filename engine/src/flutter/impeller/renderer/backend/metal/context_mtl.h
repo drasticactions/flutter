@@ -9,6 +9,8 @@
 
 #include <deque>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "flutter/fml/concurrent_message_loop.h"
 #include "flutter/fml/synchronization/sync_switch.h"
@@ -125,6 +127,18 @@ class ContextMTL final : public Context,
   std::shared_ptr<CommandBuffer> CreateCommandBuffer() const override;
 
   // |Context|
+  std::shared_ptr<CommandBuffer> CreatePassCommandBuffer() override;
+
+  // |Context|
+  bool SubmitPassCommandBuffers() override;
+
+  // |Context|
+  bool FlushCommandBuffers() override;
+
+  /// Called when the shared pass at `depth` is submitted or abandoned.
+  void OnSharedPassSubmitted(size_t depth) const;
+
+  // |Context|
   std::shared_ptr<CommandQueue> GetCommandQueue() const override;
 
   // |Context|
@@ -198,6 +212,18 @@ class ContextMTL final : public Context,
   PendingImageUploadScheduleTracker pending_image_uploads_;
   std::unique_ptr<SyncSwitchObserver> sync_switch_observer_;
   std::shared_ptr<CommandQueue> command_queue_ip_;
+  // Passes on one thread share a command buffer per nesting depth, so
+  // sibling layers don't each need a buffer and commit. Deeper buffers are
+  // committed first, as layers are drawn before their parents sample them.
+  struct PassBuffer {
+    std::shared_ptr<CommandBufferMTL> buffer;
+    bool open = false;
+  };
+  mutable Mutex pass_buffer_mutex_;
+  mutable std::vector<PassBuffer> pass_buffers_
+      IPLR_GUARDED_BY(pass_buffer_mutex_);
+  mutable std::thread::id pass_buffer_thread_
+      IPLR_GUARDED_BY(pass_buffer_mutex_);
 #ifdef IMPELLER_DEBUG
   std::shared_ptr<GPUTracerMTL> gpu_tracer_;
   std::shared_ptr<ImpellerMetalCaptureManager> capture_manager_;
@@ -213,6 +239,10 @@ class ContextMTL final : public Context,
 
   std::shared_ptr<CommandBuffer> CreateCommandBufferInQueue(
       id<MTLCommandQueue> queue) const;
+
+  /// Commits the shared pass buffers that have no open pass, deepest first.
+  /// With `same_thread_only`, only on the thread that uses them.
+  bool SubmitPassBuffer(bool same_thread_only) const;
 
   /// Waits for pending image uploads to become scheduled or terminal.
   void DrainPendingImageUploads();

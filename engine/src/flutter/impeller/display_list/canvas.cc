@@ -2112,6 +2112,15 @@ bool Canvas::Restore() {
 
     lazy_render_pass.GetInlinePassContext()->EndPass();
 
+    // Filters read the layer texture while the parent pass is open.
+    if (save_layer_state.paint.image_filter ||
+        save_layer_state.paint.color_filter ||
+        save_layer_state.paint.invert_colors) {
+      if (!renderer_.GetContext()->SubmitPassCommandBuffers()) {
+        VALIDATION_LOG << "Failed to submit the passes of a filtered layer.";
+      }
+    }
+
     // Round the subpass texture position for pixel alignment with the parent
     // pass render target. By default, we draw subpass textures with nearest
     // sampling, so aligning here is important for avoiding visual nearest
@@ -2567,6 +2576,11 @@ std::shared_ptr<Texture> Canvas::FlipBackdrop(Point global_pass_position,
     // renderer could handle that by terminating dispatch.
     render_passes_.emplace_back(std::move(rendering_config));
     return nullptr;
+  }
+
+  // Backdrop filters may read this texture while the next pass is open.
+  if (!renderer_.GetContext()->SubmitPassCommandBuffers()) {
+    VALIDATION_LOG << "Failed to submit the passes before reading the backdrop.";
   }
 
   const std::shared_ptr<Texture>& input_texture =

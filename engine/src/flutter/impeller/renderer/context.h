@@ -254,6 +254,14 @@ class Context {
   /// rendering a 2D workload.
   [[nodiscard]] virtual bool FlushCommandBuffers();
 
+  /// @brief Create a command buffer for one render pass. Backends may share
+  ///        one native buffer between such passes until
+  ///        SubmitPassCommandBuffers or FlushCommandBuffers.
+  virtual std::shared_ptr<CommandBuffer> CreatePassCommandBuffer();
+
+  /// @brief Submit the passes shared so far, unless one is still open.
+  [[nodiscard]] virtual bool SubmitPassCommandBuffers();
+
   virtual bool AddTrackingFence(const std::shared_ptr<Texture>& texture) const;
 
   virtual std::shared_ptr<const IdleWaiter> GetIdleWaiter() const;

@@ -134,7 +134,23 @@ CommandBufferMTL::CommandBufferMTL(const std::weak_ptr<const Context>& context,
       buffer_(CreateCommandBuffer(queue)),
       device_(device) {}
 
-CommandBufferMTL::~CommandBufferMTL() = default;
+CommandBufferMTL::CommandBufferMTL(const std::weak_ptr<const Context>& context,
+                                   id<MTLDevice> device,
+                                   id<MTLCommandBuffer> shared_buffer,
+                                   size_t shared_pass_depth)
+    : CommandBuffer(context),
+      buffer_(shared_buffer),
+      device_(device),
+      shared_pass_depth_(shared_pass_depth) {}
+
+CommandBufferMTL::~CommandBufferMTL() {
+  // An abandoned shared pass must not keep the shared buffer open.
+  if (shared_pass_depth_ && buffer_ != nil) {
+    if (auto context = context_.lock()) {
+      ContextMTL::Cast(*context).OnSharedPassSubmitted(*shared_pass_depth_);
+    }
+  }
+}
 
 bool CommandBufferMTL::IsValid() const {
   return buffer_ != nil;
@@ -181,6 +197,12 @@ CommandBuffer::SubmitResult CommandBufferMTL::SubmitCommandsInternal(
   if (!context) {
     return SubmitResult(false);
   }
+
+  if (shared_pass_depth_) {
+    return SubmitSharedPass(ContextMTL::Cast(*context),
+                            create_scheduling_receipt, std::move(callback));
+  }
+
 #ifdef IMPELLER_DEBUG
   ContextMTL::Cast(*context).GetGPUTracer()->RecordCmdBuffer(buffer_);
 #endif  // IMPELLER_DEBUG
@@ -224,6 +246,40 @@ CommandBuffer::SubmitResult CommandBufferMTL::SubmitCommandsInternal(
 
   [buffer_ commit];
   buffer_ = nil;
+  return SubmitResult(true, std::move(scheduling_receipt));
+}
+
+CommandBuffer::SubmitResult CommandBufferMTL::SubmitSharedPass(
+    const ContextMTL& context,
+    bool create_scheduling_receipt,
+    CompletionCallback callback) {
+  // The context commits the shared buffer and records the submission.
+  std::shared_ptr<CommandBufferSchedulingReceiptState> scheduling_receipt;
+  if (create_scheduling_receipt) {
+    scheduling_receipt =
+        std::make_shared<CommandBufferSchedulingReceiptState>();
+    [buffer_ addScheduledHandler:^(id<MTLCommandBuffer> buffer) {
+      scheduling_receipt->MarkScheduled();
+    }];
+    [buffer_ addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+      scheduling_receipt->MarkTerminal();
+    }];
+  }
+
+  if (callback) {
+    CompletionCallback callback_for_block = std::move(callback);
+    [buffer_
+        addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+          [[maybe_unused]] auto result =
+              LogMTLCommandBufferErrorIfPresent(buffer);
+          FML_DCHECK(result)
+              << "Must not have errors during command buffer submission.";
+          callback_for_block(ToCommitResult(buffer.status));
+        }];
+  }
+
+  buffer_ = nil;
+  context.OnSharedPassSubmitted(*shared_pass_depth_);
   return SubmitResult(true, std::move(scheduling_receipt));
 }
 

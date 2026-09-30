@@ -7,10 +7,14 @@
 
 #include <Metal/Metal.h>
 
+#include <optional>
+
 #include "impeller/core/allocator.h"
 #include "impeller/renderer/command_buffer.h"
 
 namespace impeller {
+
+class ContextMTL;
 
 class CommandBufferMTL final : public CommandBuffer {
  public:
@@ -22,10 +26,18 @@ class CommandBufferMTL final : public CommandBuffer {
 
   id<MTLCommandBuffer> buffer_ = nil;
   id<MTLDevice> device_ = nil;
+  // Encodes into ContextMTL's shared pass buffer at this depth; submitting
+  // doesn't commit.
+  std::optional<size_t> shared_pass_depth_;
 
   CommandBufferMTL(const std::weak_ptr<const Context>& context,
                    id<MTLDevice> device,
                    id<MTLCommandQueue> queue);
+
+  CommandBufferMTL(const std::weak_ptr<const Context>& context,
+                   id<MTLDevice> device,
+                   id<MTLCommandBuffer> shared_buffer,
+                   size_t shared_pass_depth);
 
   // |CommandBuffer|
   void SetLabel(std::string_view label) const override;
@@ -57,6 +69,10 @@ class CommandBufferMTL final : public CommandBuffer {
 
   SubmitResult SubmitCommandsInternal(bool create_scheduling_receipt,
                                       CompletionCallback callback);
+
+  SubmitResult SubmitSharedPass(const ContextMTL& context,
+                                bool create_scheduling_receipt,
+                                CompletionCallback callback);
 
   CommandBufferMTL(const CommandBufferMTL&) = delete;
 

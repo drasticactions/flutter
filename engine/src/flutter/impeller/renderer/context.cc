@@ -39,6 +39,14 @@ bool Context::FlushCommandBuffers() {
   return true;
 }
 
+std::shared_ptr<CommandBuffer> Context::CreatePassCommandBuffer() {
+  return CreateCommandBuffer();
+}
+
+bool Context::SubmitPassCommandBuffers() {
+  return true;
+}
+
 std::shared_ptr<const IdleWaiter> Context::GetIdleWaiter() const {
   return nullptr;
 }

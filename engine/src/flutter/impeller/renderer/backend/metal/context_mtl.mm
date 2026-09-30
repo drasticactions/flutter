@@ -360,11 +360,92 @@ std::shared_ptr<SamplerLibrary> ContextMTL::GetSamplerLibrary() const {
 
 // |Context|
 std::shared_ptr<CommandBuffer> ContextMTL::CreateCommandBuffer() const {
+  // Keeps submission order for buffers created between shared passes.
+  SubmitPassBuffer(/*same_thread_only=*/true);
   return CreateCommandBufferInQueue(command_queue_);
 }
 
 // |Context|
-void ContextMTL::Shutdown() {}
+std::shared_ptr<CommandBuffer> ContextMTL::CreatePassCommandBuffer() {
+  if (!IsValid()) {
+    return nullptr;
+  }
+  {
+    Lock lock(pass_buffer_mutex_);
+    auto thread = std::this_thread::get_id();
+    bool in_use = false;
+    for (const auto& pass_buffer : pass_buffers_) {
+      in_use |= pass_buffer.buffer != nullptr;
+    }
+    if (!in_use || pass_buffer_thread_ == thread) {
+      pass_buffer_thread_ = thread;
+      // Open passes are the chain of enclosing passes: depths [0, depth).
+      size_t depth = 0;
+      while (depth < pass_buffers_.size() && pass_buffers_[depth].open) {
+        depth++;
+      }
+      if (depth == pass_buffers_.size()) {
+        pass_buffers_.emplace_back();
+      }
+      auto& pass_buffer = pass_buffers_[depth];
+      if (!pass_buffer.buffer) {
+        pass_buffer.buffer = std::static_pointer_cast<CommandBufferMTL>(
+            CreateCommandBufferInQueue(command_queue_));
+        if (!pass_buffer.buffer) {
+          return nullptr;
+        }
+      }
+      pass_buffer.open = true;
+      return std::shared_ptr<CommandBufferMTL>(new CommandBufferMTL(
+          weak_from_this(), device_, pass_buffer.buffer->buffer_, depth));
+    }
+  }
+  // Another thread is using the shared buffers.
+  return CreateCommandBufferInQueue(command_queue_);
+}
+
+// |Context|
+bool ContextMTL::SubmitPassCommandBuffers() {
+  return SubmitPassBuffer(/*same_thread_only=*/true);
+}
+
+// |Context|
+bool ContextMTL::FlushCommandBuffers() {
+  return SubmitPassBuffer(/*same_thread_only=*/true);
+}
+
+void ContextMTL::OnSharedPassSubmitted(size_t depth) const {
+  Lock lock(pass_buffer_mutex_);
+  if (depth < pass_buffers_.size()) {
+    pass_buffers_[depth].open = false;
+  }
+}
+
+bool ContextMTL::SubmitPassBuffer(bool same_thread_only) const {
+  Lock lock(pass_buffer_mutex_);
+  if (same_thread_only && pass_buffer_thread_ != std::this_thread::get_id()) {
+    return true;
+  }
+  bool result = true;
+  for (size_t i = pass_buffers_.size(); i > 0; i--) {
+    auto& pass_buffer = pass_buffers_[i - 1];
+    if (pass_buffer.open) {
+      break;
+    }
+    if (auto buffer = std::move(pass_buffer.buffer)) {
+      result &= buffer
+                    ->SubmitCommandsInternal(
+                        /*create_scheduling_receipt=*/false, {})
+                    .submitted;
+    }
+  }
+  return result;
+}
+
+// |Context|
+void ContextMTL::Shutdown() {
+  SubmitPassBuffer(/*same_thread_only=*/false);
+}
 
 #ifdef IMPELLER_DEBUG
 std::shared_ptr<GPUTracerMTL> ContextMTL::GetGPUTracer() const {
@@ -426,6 +507,7 @@ bool ContextMTL::UpdateOffscreenLayerPixelFormat(PixelFormat format) {
 
 id<MTLCommandBuffer> ContextMTL::CreateMTLCommandBuffer(
     const std::string& label) const {
+  SubmitPassBuffer(/*same_thread_only=*/true);
   auto buffer = [command_queue_ commandBuffer];
   if (!label.empty()) {
     [buffer setLabel:@(label.data())];
@@ -505,6 +587,7 @@ void ContextMTL::FlushTasksAwaitingGPU() {
 }
 
 bool ContextMTL::FinishQueue() {
+  SubmitPassBuffer(/*same_thread_only=*/false);
   id<MTLCommandBuffer> command_buffer =
       ContextMTL::Cast(this)->CreateMTLCommandBuffer("Finish Queue Waiter");
   [command_buffer commit];

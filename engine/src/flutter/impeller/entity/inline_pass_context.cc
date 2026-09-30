@@ -84,7 +84,7 @@ const std::shared_ptr<RenderPass>& InlinePassContext::GetRenderPass() {
   /// time this method is called, but it'll also run if the pass has been
   /// previously ended via `EndPass`.
 
-  command_buffer_ = renderer_.GetContext()->CreateCommandBuffer();
+  command_buffer_ = renderer_.GetContext()->CreatePassCommandBuffer();
   if (!command_buffer_) {
     VALIDATION_LOG << "Could not create command buffer.";
     return pass_;

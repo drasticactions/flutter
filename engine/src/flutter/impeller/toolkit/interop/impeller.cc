@@ -23,6 +23,7 @@
 #include "impeller/toolkit/interop/formats.h"
 #include "impeller/toolkit/interop/fragment_program.h"
 #include "impeller/toolkit/interop/glyph_info.h"
+#include "impeller/toolkit/interop/glyph_run.h"
 #include "impeller/toolkit/interop/image_decoder.h"
 #include "impeller/toolkit/interop/image_filter.h"
 #include "impeller/toolkit/interop/line_metrics.h"
@@ -72,6 +73,7 @@ DEFINE_PEER_GETTER(DisplayListBuilder, ImpellerDisplayListBuilder);
 DEFINE_PEER_GETTER(Font, ImpellerFont);
 DEFINE_PEER_GETTER(FragmentProgram, ImpellerFragmentProgram);
 DEFINE_PEER_GETTER(GlyphInfo, ImpellerGlyphInfo);
+DEFINE_PEER_GETTER(GlyphRun, ImpellerGlyphRun);
 DEFINE_PEER_GETTER(ImageDecoder, ImpellerImageDecoder);
 DEFINE_PEER_GETTER(ImageFilter, ImpellerImageFilter);
 DEFINE_PEER_GETTER(LineMetrics, ImpellerLineMetrics);
@@ -1854,6 +1856,29 @@ void ImpellerFontRelease(ImpellerFont font) {
 }
 
 IMPELLER_EXTERN_C
+ImpellerGlyphRun ImpellerGlyphRunNew(ImpellerFont font,
+                                     const uint16_t* glyphs,
+                                     const ImpellerPoint* positions,
+                                     uint32_t count) {
+  auto run = Create<GlyphRun>(*GetPeer(font), glyphs, positions, count);
+  if (!run->IsValid()) {
+    VALIDATION_LOG << "Could not create glyph run.";
+    return nullptr;
+  }
+  return run.Leak();
+}
+
+IMPELLER_EXTERN_C
+void ImpellerGlyphRunRetain(ImpellerGlyphRun run) {
+  ObjectBase::SafeRetain(run);
+}
+
+IMPELLER_EXTERN_C
+void ImpellerGlyphRunRelease(ImpellerGlyphRun run) {
+  ObjectBase::SafeRelease(run);
+}
+
+IMPELLER_EXTERN_C
 void ImpellerFontSetSkewX(ImpellerFont font, float skew) {
   GetPeer(font)->SetSkewX(skew);
 }
@@ -1891,6 +1916,15 @@ void ImpellerDisplayListBuilderDrawGlyphs(ImpellerDisplayListBuilder builder,
                                           ImpellerPaint paint) {
   GetPeer(builder)->DrawGlyphs(*GetPeer(font), glyphs, positions, count,
                                ToImpellerType(*origin), *GetPeer(paint));
+}
+
+IMPELLER_EXTERN_C
+void ImpellerDisplayListBuilderDrawGlyphRun(ImpellerDisplayListBuilder builder,
+                                            ImpellerGlyphRun run,
+                                            const ImpellerPoint* origin,
+                                            ImpellerPaint paint) {
+  GetPeer(builder)->DrawGlyphRun(*GetPeer(run), ToImpellerType(*origin),
+                                 *GetPeer(paint));
 }
 
 IMPELLER_EXTERN_C

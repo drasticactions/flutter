@@ -7,6 +7,8 @@
 
 #include <Metal/Metal.h>
 
+#include <optional>
+
 #include "impeller/renderer/backend/metal/pass_bindings_cache_mtl.h"
 #include "impeller/renderer/render_pass.h"
 #include "impeller/renderer/render_target.h"
@@ -42,6 +44,10 @@ class RenderPassMTL final : public RenderPass {
   bool has_label_ = false;
   BufferView index_buffer_ = {};
   PrimitiveType primitive_type_ = {};
+  // Last values set on the encoder, to skip redundant calls.
+  std::optional<MTLWinding> winding_;
+  std::optional<MTLCullMode> cull_mode_;
+  std::optional<MTLTriangleFillMode> fill_mode_;
   MTLIndexType index_type_ = {};
 
   RenderPassMTL(std::shared_ptr<const Context> context,

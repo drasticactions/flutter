@@ -182,6 +182,31 @@ void DisplayListBuilder::DrawParagraph(const Paragraph& paragraph,
   handle->Paint(&builder_, point.x, point.y);
 }
 
+// Like SkParagraph: color sources need glyph coverage and thick strokes look
+// better as paths, so those draw outlines instead of atlas glyphs.
+static bool DrawsGlyphOutlines(const flutter::DlPaint& paint) {
+  return paint.getColorSource() ||
+         (paint.getDrawStyle() == flutter::DlDrawStyle::kStroke &&
+          paint.getStrokeWidth() > 4);
+}
+
+void DisplayListBuilder::DrawGlyphRun(const GlyphRun& run,
+                                      Point origin,
+                                      const Paint& paint) {
+  const auto& dl_paint = paint.GetPaint();
+  if (DrawsGlyphOutlines(dl_paint)) {
+    const auto& outlines = run.GetOutlines();
+    // Glyphs without outlines are color glyphs, which ignore color sources.
+    if (!outlines.IsEmpty()) {
+      builder_.DrawPath(outlines.WithOffset(origin), dl_paint);
+      return;
+    }
+  }
+  if (run.IsValid()) {
+    builder_.DrawText(run.GetText(), origin.x, origin.y, dl_paint);
+  }
+}
+
 void DisplayListBuilder::DrawGlyphs(const Font& font,
                                     const uint16_t* glyphs,
                                     const ImpellerPoint* positions,
@@ -189,11 +214,7 @@ void DisplayListBuilder::DrawGlyphs(const Font& font,
                                     Point origin,
                                     const Paint& paint) {
   const auto& dl_paint = paint.GetPaint();
-  // Like SkParagraph: color sources need glyph coverage and thick strokes look
-  // better as paths, so draw outlines instead of atlas glyphs.
-  if (dl_paint.getColorSource() ||
-      (dl_paint.getDrawStyle() == flutter::DlDrawStyle::kStroke &&
-       dl_paint.getStrokeWidth() > 4)) {
+  if (DrawsGlyphOutlines(dl_paint)) {
     SkPathBuilder outlines;
     for (uint32_t i = 0; i < count; i++) {
       if (auto glyph_path = font.GetFont().getPath(glyphs[i])) {

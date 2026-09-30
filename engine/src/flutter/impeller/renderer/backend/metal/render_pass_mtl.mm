@@ -238,13 +238,23 @@ void RenderPassMTL::SetPipeline(PipelineRef pipeline) {
   pass_bindings_.SetDepthStencilState(
       PipelineMTL::Cast(*pipeline).GetMTLDepthStencilState());
 
-  [encoder_ setFrontFacingWinding:pipeline_desc.GetWindingOrder() ==
-                                          WindingOrder::kClockwise
-                                      ? MTLWindingClockwise
-                                      : MTLWindingCounterClockwise];
-  [encoder_ setCullMode:ToMTLCullMode(pipeline_desc.GetCullMode())];
-  [encoder_ setTriangleFillMode:ToMTLTriangleFillMode(
-                                    pipeline_desc.GetPolygonMode())];
+  auto winding = pipeline_desc.GetWindingOrder() == WindingOrder::kClockwise
+                     ? MTLWindingClockwise
+                     : MTLWindingCounterClockwise;
+  if (winding_ != winding) {
+    winding_ = winding;
+    [encoder_ setFrontFacingWinding:winding];
+  }
+  auto cull_mode = ToMTLCullMode(pipeline_desc.GetCullMode());
+  if (cull_mode_ != cull_mode) {
+    cull_mode_ = cull_mode;
+    [encoder_ setCullMode:cull_mode];
+  }
+  auto fill_mode = ToMTLTriangleFillMode(pipeline_desc.GetPolygonMode());
+  if (fill_mode_ != fill_mode) {
+    fill_mode_ = fill_mode;
+    [encoder_ setTriangleFillMode:fill_mode];
+  }
   has_valid_pipeline_ = true;
 }
 

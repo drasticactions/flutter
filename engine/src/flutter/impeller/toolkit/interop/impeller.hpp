@@ -72,6 +72,7 @@ struct Proc {
   PROC(ImpellerDisplayListBuilderCreateDisplayListNew)            \
   PROC(ImpellerDisplayListBuilderDrawDashedLine)                  \
   PROC(ImpellerDisplayListBuilderDrawDisplayList)                 \
+  PROC(ImpellerDisplayListBuilderDrawGlyphRun)                    \
   PROC(ImpellerDisplayListBuilderDrawGlyphs)                      \
   PROC(ImpellerDisplayListBuilderDrawLine)                        \
   PROC(ImpellerDisplayListBuilderDrawOval)                        \
@@ -120,6 +121,9 @@ struct Proc {
   PROC(ImpellerGlyphInfoIsEllipsis)                               \
   PROC(ImpellerGlyphInfoRelease)                                  \
   PROC(ImpellerGlyphInfoRetain)                                   \
+  PROC(ImpellerGlyphRunNew)                                       \
+  PROC(ImpellerGlyphRunRelease)                                   \
+  PROC(ImpellerGlyphRunRetain)                                    \
   PROC(ImpellerImageDecoderDecode)                                \
   PROC(ImpellerImageDecoderGetSize)                               \
   PROC(ImpellerImageDecoderNew)                                   \

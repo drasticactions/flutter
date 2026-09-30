@@ -241,6 +241,14 @@ IMPELLER_DEFINE_HANDLE(ImpellerTypeface);
 IMPELLER_DEFINE_HANDLE(ImpellerFont);
 
 //------------------------------------------------------------------------------
+/// A glyph run holds positioned glyphs of one font, prepared once so that
+/// drawing it many times does not repeat the work.
+///
+/// Glyph runs are immutable and thread-safe.
+///
+IMPELLER_DEFINE_HANDLE(ImpellerGlyphRun);
+
+//------------------------------------------------------------------------------
 /// An image decoder reads the size of compressed image data (PNG, JPEG, WebP,
 /// GIF, BMP, WBMP or ICO) and decodes it to pixels. Animated images decode
 /// their first frame.
@@ -2849,6 +2857,21 @@ void ImpellerDisplayListBuilderDrawGlyphs(
     ImpellerPaint IMPELLER_NONNULL paint);
 
 //------------------------------------------------------------------------------
+/// @brief      Draw a glyph run like ImpellerDisplayListBuilderDrawGlyphs.
+///
+/// @param[in]  builder  The builder.
+/// @param[in]  run      The glyph run.
+/// @param[in]  origin   The origin the glyph positions are relative to.
+/// @param[in]  paint    The paint.
+///
+IMPELLER_EXPORT
+void ImpellerDisplayListBuilderDrawGlyphRun(
+    ImpellerDisplayListBuilder IMPELLER_NONNULL builder,
+    ImpellerGlyphRun IMPELLER_NONNULL run,
+    const ImpellerPoint* IMPELLER_NONNULL origin,
+    ImpellerPaint IMPELLER_NONNULL paint);
+
+//------------------------------------------------------------------------------
 /// @brief      Draw a shadow for a Path given a material elevation. If the
 ///             occluding object is not opaque, additional hints (via the
 ///             `occluder_is_transparent` argument) must be provided to render
@@ -3169,6 +3192,41 @@ void ImpellerFontRetain(ImpellerFont IMPELLER_NULLABLE font);
 ///
 IMPELLER_EXPORT
 void ImpellerFontRelease(ImpellerFont IMPELLER_NULLABLE font);
+
+//------------------------------------------------------------------------------
+/// @brief      Create a glyph run from glyphs positioned relative to an
+///             origin given when the run is drawn.
+///
+/// @param[in]  font       The font.
+/// @param[in]  glyphs     The glyph indices.
+/// @param[in]  positions  The glyph positions.
+/// @param[in]  count      The number of glyphs.
+///
+/// @return     The glyph run or NULL if it could not be created.
+///
+IMPELLER_EXPORT IMPELLER_NODISCARD ImpellerGlyphRun IMPELLER_NULLABLE
+ImpellerGlyphRunNew(ImpellerFont IMPELLER_NONNULL font,
+                    const uint16_t* IMPELLER_NONNULL glyphs,
+                    const ImpellerPoint* IMPELLER_NONNULL positions,
+                    uint32_t count);
+
+//------------------------------------------------------------------------------
+/// @brief      Retain a strong reference to the object. The object can be NULL
+///             in which case this method is a no-op.
+///
+/// @param[in]  run  The glyph run.
+///
+IMPELLER_EXPORT
+void ImpellerGlyphRunRetain(ImpellerGlyphRun IMPELLER_NULLABLE run);
+
+//------------------------------------------------------------------------------
+/// @brief      Release a previously retained reference to the object. The
+///             object can be NULL in which case this method is a no-op.
+///
+/// @param[in]  run  The glyph run.
+///
+IMPELLER_EXPORT
+void ImpellerGlyphRunRelease(ImpellerGlyphRun IMPELLER_NULLABLE run);
 
 //------------------------------------------------------------------------------
 /// @brief      Set the horizontal skew of the glyphs, for synthetic oblique

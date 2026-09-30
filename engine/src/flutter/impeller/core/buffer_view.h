@@ -30,6 +30,9 @@ struct BufferView {
 
   std::shared_ptr<const DeviceBuffer> TakeBuffer();
 
+  /// A view of another range of the same buffer, with the same ownership.
+  BufferView WithRange(Range range) const;
+
   explicit operator bool() const;
 
  private:

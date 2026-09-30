@@ -37,6 +37,12 @@ class SolidColorContents final : public ColorSourceContents {
               const Entity& entity,
               RenderPass& pass) const override;
 
+  // |Contents|
+  bool AppendToBatch(DrawBatch& batch,
+                     const ContentContext& renderer,
+                     const Entity& entity,
+                     RenderPass& pass) const override;
+
   std::optional<Color> AsBackgroundColor(const Entity& entity,
                                          ISize target_size) const override;
 
@@ -45,6 +51,11 @@ class SolidColorContents final : public ColorSourceContents {
       const ColorFilterProc& color_filter_proc) override;
 
  private:
+  bool RenderGeometry(const ContentContext& renderer,
+                      const Entity& entity,
+                      RenderPass& pass,
+                      const CreateGeometryCallback& create_geom_callback) const;
+
   const Geometry* geometry_ = nullptr;
   Color color_;
 

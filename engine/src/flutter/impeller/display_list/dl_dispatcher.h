@@ -460,6 +460,8 @@ class FirstPassDispatcher : public flutter::IgnoreAttributeDispatchHelper,
 
   const ContentContext& renderer_;
   Matrix matrix_;
+  // transformReset returns here; nested display lists start from it.
+  Matrix initial_matrix_;
   std::vector<Matrix> stack_;
   std::unordered_map<int64_t, BackdropData> backdrop_data_;
   // note: cull rects are always in the global coordinate space.

@@ -5,6 +5,7 @@
 #include "solid_color_contents.h"
 
 #include "impeller/entity/contents/content_context.h"
+#include "impeller/entity/draw_batch.h"
 #include "impeller/entity/entity.h"
 #include "impeller/entity/geometry/geometry.h"
 #include "impeller/renderer/render_pass.h"
@@ -52,6 +53,14 @@ std::optional<Rect> SolidColorContents::GetCoverage(
 bool SolidColorContents::Render(const ContentContext& renderer,
                                 const Entity& entity,
                                 RenderPass& pass) const {
+  return RenderGeometry(renderer, entity, pass, DefaultCreateGeometryCallback);
+}
+
+bool SolidColorContents::RenderGeometry(
+    const ContentContext& renderer,
+    const Entity& entity,
+    RenderPass& pass,
+    const CreateGeometryCallback& create_geom_callback) const {
   using VS = SolidFillPipeline::VertexShader;
   using FS = SolidFillPipeline::FragmentShader;
   auto& data_host_buffer = renderer.GetTransientsDataBuffer();
@@ -71,7 +80,53 @@ bool SolidColorContents::Render(const ContentContext& renderer,
         FS::BindFragInfo(pass, data_host_buffer.EmplaceUniform(frag_info));
         pass.SetCommandLabel("Solid Fill");
         return true;
-      });
+      },
+      /*force_stencil=*/false, create_geom_callback);
+}
+
+// Same draw state and vertices as Render, for geometry without stencil.
+bool SolidColorContents::AppendToBatch(DrawBatch& batch,
+                                       const ContentContext& renderer,
+                                       const Entity& entity,
+                                       RenderPass& pass) const {
+  const Geometry* geometry = GetGeometry();
+  GeometryResult::Mode mode = geometry->GetResultMode();
+  if (mode != GeometryResult::Mode::kNormal &&
+      mode != GeometryResult::Mode::kPreventOverdraw) {
+    return false;
+  }
+
+  GeometryResult result = geometry->GetPositionBuffer(renderer, entity, pass);
+  if (result.vertex_buffer.vertex_count == 0u) {
+    return true;
+  }
+  // Draws the geometry made above after the pending batch.
+  auto draw_now = [&]() {
+    batch.Flush(renderer, pass);
+    RenderGeometry(renderer, entity, pass,
+                   [&result](const ContentContext&, const Entity&, RenderPass&,
+                             const Geometry*) { return result; });
+    return true;
+  };
+  if (!DrawBatch::CanBatch(result)) {
+    return draw_now();
+  }
+
+  auto options = OptionsFromPassAndEntity(pass, entity);
+  options.primitive_type = PrimitiveType::kTriangle;
+  options.depth_write_enabled = options.blend_mode == BlendMode::kSrc;
+  if (result.mode == GeometryResult::Mode::kPreventOverdraw) {
+    options.depth_write_enabled = true;
+    options.depth_compare = CompareFunction::kGreater;
+  }
+
+  if (!batch.AppendFill(renderer, pass, options, result,
+                        GetColor().Premultiply() *
+                            geometry->ComputeAlphaCoverage(
+                                entity.GetTransform()))) {
+    return draw_now();
+  }
+  return true;
 }
 
 std::optional<Color> SolidColorContents::AsBackgroundColor(

@@ -46,6 +46,11 @@ bool InlinePassContext::EndPass(bool is_onscreen) {
   }
   FML_DCHECK(command_buffer_);
 
+  if (!batch_.Flush(renderer_, *pass_)) {
+    VALIDATION_LOG << "Failed to draw the pending batch while ending the "
+                      "render pass.";
+  }
+
   if (!pass_->EncodeCommands()) {
     VALIDATION_LOG << "Failed to encode and submit command buffer while ending "
                       "render pass.";
@@ -76,6 +81,22 @@ EntityPassTarget& InlinePassContext::GetPassTarget() const {
 }
 
 const std::shared_ptr<RenderPass>& InlinePassContext::GetRenderPass() {
+  if (IsActive() && !batch_.Flush(renderer_, *pass_)) {
+    VALIDATION_LOG << "Failed to draw the pending batch.";
+  }
+  return EnsureRenderPass();
+}
+
+bool InlinePassContext::AppendToBatch(const Entity& entity) {
+  const std::shared_ptr<RenderPass>& pass = EnsureRenderPass();
+  if (!pass) {
+    return false;
+  }
+  return entity.GetContents()->AppendToBatch(batch_, renderer_, entity,
+                                             *pass);
+}
+
+const std::shared_ptr<RenderPass>& InlinePassContext::EnsureRenderPass() {
   if (IsActive()) {
     return pass_;
   }

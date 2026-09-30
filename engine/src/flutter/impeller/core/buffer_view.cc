@@ -18,6 +18,12 @@ const DeviceBuffer* BufferView::GetBuffer() const {
   return raw_buffer_ ? raw_buffer_ : buffer_.get();
 }
 
+BufferView BufferView::WithRange(Range range) const {
+  BufferView view = *this;
+  view.range_ = range;
+  return view;
+}
+
 std::shared_ptr<const DeviceBuffer> BufferView::TakeBuffer() {
   if (buffer_) {
     raw_buffer_ = buffer_.get();

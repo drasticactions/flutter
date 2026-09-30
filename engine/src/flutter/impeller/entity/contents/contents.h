@@ -17,6 +17,7 @@
 namespace impeller {
 
 class ContentContext;
+class DrawBatch;
 struct ContentContextOptions;
 class Entity;
 class Surface;
@@ -49,6 +50,12 @@ class Contents {
   virtual bool Render(const ContentContext& renderer,
                       const Entity& entity,
                       RenderPass& pass) const = 0;
+
+  /// @brief Adds the draw to a batch, or returns false if it can't.
+  virtual bool AppendToBatch(DrawBatch& batch,
+                             const ContentContext& renderer,
+                             const Entity& entity,
+                             RenderPass& pass) const;
 
   //----------------------------------------------------------------------------
   /// @brief   Get the area of the render pass that will be affected when this

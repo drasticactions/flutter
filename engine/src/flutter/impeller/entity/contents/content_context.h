@@ -167,6 +167,8 @@ class ContentContext {
   PipelineRef GetDownsampleBoundedPipeline(ContentContextOptions opts) const;
   PipelineRef GetDrawVerticesUberPipeline(BlendMode blend_mode, ContentContextOptions opts) const;
   PipelineRef GetFastGradientPipeline(ContentContextOptions opts) const;
+
+  PipelineRef GetBatchedFillPipeline(ContentContextOptions opts) const;
   PipelineRef GetFramebufferBlendColorBurnPipeline(ContentContextOptions opts) const;
   PipelineRef GetFramebufferBlendColorDodgePipeline(ContentContextOptions opts) const;
   PipelineRef GetFramebufferBlendColorPipeline( ContentContextOptions opts) const;

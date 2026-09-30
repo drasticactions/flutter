@@ -980,7 +980,9 @@ void CanvasDlDispatcher::SetBackdropData(
 FirstPassDispatcher::FirstPassDispatcher(const ContentContext& renderer,
                                          const Matrix& initial_matrix,
                                          const Rect cull_rect)
-    : renderer_(renderer), matrix_(initial_matrix) {
+    : renderer_(renderer),
+      matrix_(initial_matrix),
+      initial_matrix_(initial_matrix) {
   cull_rect_state_.push_back(cull_rect);
 }
 
@@ -1153,7 +1155,7 @@ void FirstPassDispatcher::transformFullPerspective(
 // clang-format on
 
 void FirstPassDispatcher::transformReset() {
-  matrix_ = Matrix();
+  matrix_ = initial_matrix_;
 }
 
 void FirstPassDispatcher::drawText(const std::shared_ptr<flutter::DlText>& text,
@@ -1200,6 +1202,8 @@ void FirstPassDispatcher::drawDisplayList(
   paint_ = Paint{};
   bool old_has_image_filter = has_image_filter_;
   has_image_filter_ = false;
+  Matrix old_initial_matrix = initial_matrix_;
+  initial_matrix_ = matrix_;
 
   if (matrix_.HasPerspective()) {
     display_list->Dispatch(*this);
@@ -1216,6 +1220,7 @@ void FirstPassDispatcher::drawDisplayList(
   restore();
   paint_ = old_paint;
   has_image_filter_ = old_has_image_filter;
+  initial_matrix_ = old_initial_matrix;
   FML_DCHECK(stack_depth == stack_.size());
 }
 

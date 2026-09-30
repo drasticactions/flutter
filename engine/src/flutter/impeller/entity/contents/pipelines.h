@@ -8,6 +8,8 @@
 #include "flutter/fml/build_config.h"
 #include "impeller/entity/advanced_blend.frag.h"
 #include "impeller/entity/advanced_blend.vert.h"
+#include "impeller/entity/batched_fill.frag.h"
+#include "impeller/entity/batched_fill.vert.h"
 #include "impeller/entity/border_mask_blur.frag.h"
 #include "impeller/entity/circle.frag.h"
 #include "impeller/entity/circle.vert.h"
@@ -90,6 +92,7 @@ using FramebufferBlendPipelineHandle =
                          FramebufferBlendFragmentShader>;
 
 // clang-format off
+using BatchedFillPipeline = RenderPipelineHandle<BatchedFillVertexShader, BatchedFillFragmentShader>;
 using BlendColorBurnPipeline = AdvancedBlendPipelineHandle;
 using BlendColorDodgePipeline = AdvancedBlendPipelineHandle;
 using BlendColorPipeline = AdvancedBlendPipelineHandle;

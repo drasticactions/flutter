@@ -8,6 +8,8 @@
 #include <cstdint>
 
 #include "impeller/entity/contents/content_context.h"
+#include "impeller/entity/draw_batch.h"
+#include "impeller/entity/entity.h"
 #include "impeller/entity/entity_pass_target.h"
 #include "impeller/renderer/context.h"
 #include "impeller/renderer/render_pass.h"
@@ -33,13 +35,20 @@ class InlinePassContext {
 
   uint32_t GetPassCount() const;
 
+  /// Returns the render pass after drawing any pending batch.
   const std::shared_ptr<RenderPass>& GetRenderPass();
 
+  /// Adds the entity to the pending batch, or returns false if it can't.
+  bool AppendToBatch(const Entity& entity);
+
  private:
+  const std::shared_ptr<RenderPass>& EnsureRenderPass();
+
   const ContentContext& renderer_;
   EntityPassTarget& pass_target_;
   std::shared_ptr<CommandBuffer> command_buffer_;
   std::shared_ptr<RenderPass> pass_;
+  DrawBatch batch_;
   uint32_t pass_count_ = 0;
 
   InlinePassContext(const InlinePassContext&) = delete;

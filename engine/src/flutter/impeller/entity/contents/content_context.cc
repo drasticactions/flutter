@@ -248,6 +248,7 @@ struct ContentContext::Pipelines {
   Variants<ConicalGradientUniformFillStripPipeline> conical_gradient_uniform_fill_strip;
   Variants<ConicalGradientUniformFillStripRadialPipeline> conical_gradient_uniform_fill_strip_and_radial;
   Variants<FastGradientPipeline> fast_gradient;
+  Variants<BatchedFillPipeline> batched_fill;
   Variants<FramebufferBlendColorBurnPipeline> framebuffer_blend_colorburn;
   Variants<FramebufferBlendColorDodgePipeline> framebuffer_blend_colordodge;
   Variants<FramebufferBlendColorPipeline> framebuffer_blend_color;
@@ -635,6 +636,7 @@ ContentContext::ContentContext(
             GetContext()->GetCapabilities()->GetDefaultGlyphAtlasFormat() ==
             PixelFormat::kA8UNormInt)});
     pipelines_->solid_fill.CreateDefault(*context_, options);
+    pipelines_->batched_fill.CreateDefault(*context_, options);
     pipelines_->texture.CreateDefault(*context_, options);
     pipelines_->fast_gradient.CreateDefault(*context_, options);
     pipelines_->circle.CreateDefault(*context_, options);
@@ -1026,6 +1028,11 @@ void ContentContext::ResetTransientsBuffers() {
 
 void ContentContext::InitializeCommonlyUsedShadersIfNeeded() const {
   GetContext()->InitializeCommonlyUsedShadersIfNeeded();
+}
+
+PipelineRef ContentContext::GetBatchedFillPipeline(
+    ContentContextOptions opts) const {
+  return GetPipeline(this, pipelines_->batched_fill, opts);
 }
 
 PipelineRef ContentContext::GetFastGradientPipeline(

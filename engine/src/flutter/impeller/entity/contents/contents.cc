@@ -49,6 +49,13 @@ Contents::Contents() = default;
 
 Contents::~Contents() = default;
 
+bool Contents::AppendToBatch(DrawBatch& batch,
+                             const ContentContext& renderer,
+                             const Entity& entity,
+                             RenderPass& pass) const {
+  return false;
+}
+
 bool Contents::IsOpaque(const Matrix& transform) const {
   return false;
 }

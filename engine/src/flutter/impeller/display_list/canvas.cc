@@ -2524,8 +2524,14 @@ void Canvas::AddRenderEntityToCurrentPass(Entity& entity, bool reuse_depth) {
     }
   }
 
-  const std::shared_ptr<RenderPass>& result =
-      render_passes_.back().GetInlinePassContext()->GetRenderPass();
+  InlinePassContext& pass_context =
+      *render_passes_.back().GetInlinePassContext();
+  // Consecutive draws that share their state are drawn together.
+  if (!reuse_depth && pass_context.AppendToBatch(entity)) {
+    return;
+  }
+
+  const std::shared_ptr<RenderPass>& result = pass_context.GetRenderPass();
   if (!result) {
     // Failure to produce a render pass should be explained by specific errors
     // in `InlinePassContext::GetRenderPass()`, so avoid log spam and don't

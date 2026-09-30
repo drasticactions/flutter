@@ -14,8 +14,10 @@ namespace impeller {
 
 namespace {
 
-constexpr size_t kChunkVertices = 16384;
-constexpr size_t kChunkIndices = kChunkVertices * 3;
+// Chunks start small, since a layer pass may batch only a few draws, and double
+// up to the maximum.
+constexpr size_t kMinChunkVertices = 1024;
+constexpr size_t kMaxChunkVertices = 16384;
 constexpr size_t kMaxBatchedPoints = 256;
 
 size_t PointCount(const VertexBuffer& vertex_buffer) {
@@ -27,7 +29,8 @@ size_t PointCount(const VertexBuffer& vertex_buffer) {
 template <typename T>
 bool Reserve(HostBuffer& host_buffer,
              size_t needed,
-             size_t chunk_size,
+             size_t min_chunk,
+             size_t max_chunk,
              BufferView& view,
              uint8_t*& data,
              size_t& capacity,
@@ -35,7 +38,7 @@ bool Reserve(HostBuffer& host_buffer,
   if (count + needed <= capacity) {
     return true;
   }
-  capacity = std::max(needed, chunk_size);
+  capacity = std::max(needed, std::clamp(capacity * 2, min_chunk, max_chunk));
   view = host_buffer.Emplace(capacity * sizeof(T), alignof(T),
                              [](uint8_t*) {});
   data = view.GetBuffer()->OnGetContents() + view.GetRange().offset;
@@ -77,11 +80,12 @@ bool DrawBatch::AppendFill(const ContentContext& renderer,
     Flush(renderer, pass);
   }
   if (!Reserve<Vertex>(renderer.GetTransientsDataBuffer(), point_count,
-                       kChunkVertices, vertices_.view, vertices_.data,
-                       vertices_.capacity, vertices_.count) ||
+                       kMinChunkVertices, kMaxChunkVertices, vertices_.view,
+                       vertices_.data, vertices_.capacity, vertices_.count) ||
       !Reserve<uint32_t>(renderer.GetTransientsIndexesBuffer(), index_count,
-                         kChunkIndices, indices_.view, indices_.data,
-                         indices_.capacity, indices_.count)) {
+                         kMinChunkVertices * 3, kMaxChunkVertices * 3,
+                         indices_.view, indices_.data, indices_.capacity,
+                         indices_.count)) {
     return false;
   }
   pending_ = true;
